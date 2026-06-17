@@ -1,0 +1,2309 @@
+﻿<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Actas 25-26 | Athletic Club</title>
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --red: #111111;
+      --red-dark: #000000;
+      --red-light: #E5E7EB;
+      --white: #FFFFFF;
+      --gray-50: #F9FAFB;
+      --gray-100: #F3F4F6;
+      --gray-200: #E5E7EB;
+      --gray-300: #D1D5DB;
+      --gray-500: #6B7280;
+      --gray-700: #374151;
+      --gray-900: #111827;
+      --shadow: 0 1px 3px rgba(0,0,0,.10), 0 1px 2px rgba(0,0,0,.06);
+      --shadow-md: 0 4px 6px -1px rgba(0,0,0,.10), 0 2px 4px -1px rgba(0,0,0,.06);
+      --radius: 8px;
+    }
+
+    body {
+      font-family: 'Segoe UI', Arial, sans-serif;
+      background: var(--gray-50);
+      color: var(--gray-900);
+      min-height: 100vh;
+    }
+
+    /* ── Header ── */
+    header {
+      background: var(--red);
+      color: white;
+      padding: 0 24px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      height: 56px;
+      box-shadow: var(--shadow-md);
+    }
+    header img { height: 36px; }
+    header h1 { font-size: 18px; font-weight: 700; letter-spacing: .3px; }
+    header .subtitle { font-size: 13px; opacity: .85; margin-left: auto; }
+
+    /* ── ROMO highlight ── */
+    tr.romo-row { background: #FFF8E1 !important; }
+    tr.romo-row td { font-weight: 700; color: #111827; }
+    tr.romo-row td span { color: inherit; }
+    .match-card.romo-match { border-left: 4px solid #F59E0B; background: #FFFBEB; }
+    .match-card.romo-match span { font-weight: 700; }
+
+    /* ── Nav ── */
+    nav {
+      background: white;
+      border-bottom: 1px solid var(--gray-200);
+      display: flex;
+      padding: 0 24px;
+      gap: 0;
+      box-shadow: var(--shadow);
+    }
+    nav button {
+      background: none;
+      border: none;
+      padding: 14px 20px;
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--gray-500);
+      cursor: pointer;
+      border-bottom: 3px solid transparent;
+      transition: all .15s;
+    }
+    nav button:hover { color: var(--red); }
+    nav button.active { color: var(--red); border-bottom-color: var(--red); font-weight: 600; }
+
+    /* ── Loading ── */
+    #loading {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 300px;
+      gap: 16px;
+      color: var(--gray-500);
+    }
+    .spinner {
+      width: 40px; height: 40px;
+      border: 3px solid var(--gray-200);
+      border-top-color: var(--red);
+      border-radius: 50%;
+      animation: spin .8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Pages ── */
+    .page { display: none; padding: 24px; max-width: 1400px; margin: 0 auto; }
+    .page.active { display: block; }
+
+    /* ── Filter Bar ── */
+    .filter-bar {
+      background: white;
+      border: 1px solid var(--gray-200);
+      border-radius: var(--radius);
+      padding: 16px;
+      margin-bottom: 20px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: flex-end;
+      box-shadow: var(--shadow);
+    }
+    .filter-group { display: flex; flex-direction: column; gap: 4px; min-width: 160px; }
+    .filter-group label { font-size: 11px; font-weight: 600; color: var(--gray-500); text-transform: uppercase; letter-spacing: .5px; }
+    .filter-group select, .filter-group input {
+      border: 1px solid var(--gray-300);
+      border-radius: 6px;
+      padding: 7px 10px;
+      font-size: 13px;
+      color: var(--gray-900);
+      background: white;
+      outline: none;
+      transition: border-color .15s;
+    }
+    .filter-group select:focus, .filter-group input:focus { border-color: var(--red); }
+    .filter-group.wide { min-width: 280px; }
+
+    /* ── Searchable Select ── */
+    .ss-wrapper { position: relative; width: 100%; }
+    .ss-input-wrap { position: relative; display: flex; align-items: center; }
+    .ss-icon {
+      position: absolute; left: 9px; top: 50%; transform: translateY(-50%);
+      color: var(--gray-500); pointer-events: none; display: flex; align-items: center;
+    }
+    .ss-input {
+      width: 100%;
+      border: 1px solid var(--gray-300);
+      border-radius: 6px;
+      padding: 7px 10px 7px 30px;
+      font-size: 13px;
+      color: var(--gray-900);
+      background: white;
+      outline: none;
+      transition: border-color .15s;
+      cursor: text;
+    }
+    .ss-input:focus { border-color: var(--red); }
+    .ss-dropdown {
+      display: none;
+      position: absolute;
+      top: calc(100% + 2px);
+      left: 0; right: 0;
+      background: white;
+      border: 1px solid var(--gray-300);
+      border-radius: 6px;
+      box-shadow: var(--shadow-md);
+      z-index: 200;
+      max-height: 220px;
+      overflow-y: auto;
+    }
+    .ss-dropdown.open { display: block; }
+    .ss-option {
+      padding: 8px 12px;
+      font-size: 13px;
+      cursor: pointer;
+      color: var(--gray-900);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .ss-option:hover { background: var(--gray-100); }
+    .ss-option.selected { font-weight: 600; color: var(--red); }
+
+    .btn {
+      background: var(--red);
+      color: white;
+      border: none;
+      border-radius: 6px;
+      padding: 8px 18px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background .15s;
+      align-self: flex-end;
+    }
+    .btn:hover { background: var(--red-dark); }
+    .btn.secondary {
+      background: white;
+      color: var(--gray-700);
+      border: 1px solid var(--gray-300);
+    }
+    .btn.secondary:hover { background: var(--gray-50); }
+
+    /* ── Matches Grid ── */
+    .matches-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+    .matches-header span { font-size: 13px; color: var(--gray-500); }
+
+    .match-card {
+      background: white;
+      border: 1px solid var(--gray-200);
+      border-radius: var(--radius);
+      padding: 12px 16px;
+      margin-bottom: 8px;
+      cursor: pointer;
+      transition: box-shadow .15s, border-color .15s;
+      display: grid;
+      grid-template-columns: 140px 1fr auto 1fr 120px;
+      align-items: center;
+      gap: 8px;
+      box-shadow: var(--shadow);
+    }
+    .match-card:hover { box-shadow: var(--shadow-md); border-color: var(--red); }
+
+    .match-meta { font-size: 11px; color: var(--gray-500); }
+    .match-meta strong { display: block; font-size: 12px; color: var(--gray-700); }
+
+    .team-cell {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .team-cell.away { flex-direction: row-reverse; }
+    .team-cell img { width: 28px; height: 28px; object-fit: contain; }
+    .team-cell span { font-size: 13px; font-weight: 500; }
+    .team-cell.away span { text-align: right; }
+
+    .score-box {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      background: var(--gray-900);
+      color: white;
+      border-radius: 6px;
+      padding: 6px 14px;
+      font-size: 18px;
+      font-weight: 700;
+      min-width: 80px;
+    }
+    .score-box .sep { opacity: .4; font-size: 14px; }
+
+    .match-comp {
+      font-size: 11px;
+      color: var(--gray-500);
+      text-align: right;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 120px;
+    }
+    .badge {
+      display: inline-block;
+      font-size: 10px;
+      font-weight: 600;
+      padding: 2px 6px;
+      border-radius: 4px;
+      text-transform: uppercase;
+    }
+    .badge.W { background: #D1FAE5; color: #065F46; }
+    .badge.D { background: #FEF3C7; color: #92400E; }
+    .badge.L { background: #FEE2E2; color: #991B1B; }
+
+    /* ── Pagination ── */
+    .pagination {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 8px;
+      margin-top: 20px;
+    }
+    .pagination button {
+      border: 1px solid var(--gray-300);
+      background: white;
+      border-radius: 6px;
+      padding: 6px 12px;
+      font-size: 13px;
+      cursor: pointer;
+    }
+    .pagination button.active { background: var(--red); color: white; border-color: var(--red); }
+    .pagination button:disabled { opacity: .4; cursor: default; }
+
+    /* ── Modal ── */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,.5);
+      z-index: 1000;
+      align-items: flex-start;
+      justify-content: center;
+      padding: 40px 16px;
+      overflow-y: auto;
+    }
+    .modal-overlay.open { display: flex; }
+
+    .modal {
+      background: white;
+      border-radius: 12px;
+      width: 100%;
+      max-width: 780px;
+      box-shadow: 0 20px 60px rgba(0,0,0,.25);
+      overflow: hidden;
+    }
+    .modal-header {
+      background: var(--gray-900);
+      color: white;
+      padding: 16px 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .modal-header .comp-name { font-size: 12px; opacity: .7; }
+    .modal-header .match-date { font-size: 13px; }
+    .modal-header button {
+      background: none;
+      border: none;
+      color: white;
+      font-size: 22px;
+      cursor: pointer;
+      line-height: 1;
+      opacity: .7;
+    }
+    .modal-header button:hover { opacity: 1; }
+
+    .modal-score {
+      background: var(--gray-900);
+      padding: 20px;
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      align-items: center;
+      gap: 16px;
+    }
+    .modal-team {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      text-align: center;
+    }
+    .modal-team.away { }
+    .modal-team img { width: 52px; height: 52px; object-fit: contain; }
+    .modal-team span { color: white; font-size: 14px; font-weight: 600; }
+    .modal-score-box {
+      color: white;
+      font-size: 42px;
+      font-weight: 800;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .modal-score-box .sep { opacity: .3; font-size: 28px; }
+
+    .modal-body { padding: 20px; }
+
+    .modal-info {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+      margin-bottom: 20px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid var(--gray-200);
+    }
+    .info-item { font-size: 13px; color: var(--gray-700); }
+    .info-item span { color: var(--gray-500); font-size: 12px; }
+
+    .modal-section { margin-bottom: 20px; }
+    .modal-section h3 {
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .5px;
+      color: var(--gray-500);
+      margin-bottom: 10px;
+      padding-bottom: 6px;
+      border-bottom: 1px solid var(--gray-200);
+    }
+
+    .event-list { display: flex; flex-direction: column; gap: 4px; }
+    .event-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 6px 8px;
+      border-radius: 6px;
+      font-size: 13px;
+    }
+    .event-item:hover { background: var(--gray-50); }
+    .event-item .min {
+      background: var(--gray-200);
+      color: var(--gray-700);
+      border-radius: 4px;
+      padding: 2px 6px;
+      font-size: 11px;
+      font-weight: 700;
+      min-width: 36px;
+      text-align: center;
+    }
+    .event-item .icon { font-size: 16px; }
+    .event-item .team-tag { font-size: 11px; color: var(--gray-500); margin-left: auto; }
+
+    .lineup-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+    .lineup-col h4 { font-size: 12px; font-weight: 600; color: var(--gray-700); margin-bottom: 8px; }
+    .lineup-player {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 4px 6px;
+      font-size: 12px;
+      border-radius: 4px;
+    }
+    .lineup-player:hover { background: var(--gray-50); }
+    .lineup-player .num {
+      background: var(--gray-200);
+      color: var(--gray-700);
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 10px;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+    .lineup-player.sub .num { background: var(--gray-100); }
+    .lineup-player.sub { color: var(--gray-500); }
+
+    /* ── Resúmenes page ── */
+    .section-card {
+      background: white;
+      border: 1px solid var(--gray-200);
+      border-radius: var(--radius);
+      margin-bottom: 20px;
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+    .section-card-header {
+      padding: 14px 20px;
+      background: var(--gray-50);
+      border-bottom: 1px solid var(--gray-200);
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--gray-900);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    thead th {
+      text-align: left;
+      padding: 10px 12px;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .5px;
+      color: var(--gray-500);
+      border-bottom: 1px solid var(--gray-200);
+      white-space: nowrap;
+    }
+    thead th.num { text-align: center; }
+    tbody td { padding: 8px 12px; border-bottom: 1px solid var(--gray-100); }
+    tbody tr:last-child td { border-bottom: none; }
+    tbody tr:hover td { background: var(--gray-50); }
+    td.num { text-align: center; }
+    td.bold { font-weight: 700; }
+
+    .team-with-crest {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .team-with-crest img { width: 20px; height: 20px; object-fit: contain; }
+
+    .form-badges { display: flex; gap: 3px; }
+    .form-badge {
+      width: 18px; height: 18px;
+      border-radius: 3px;
+      font-size: 10px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .form-badge.W { background: #D1FAE5; color: #065F46; }
+    .form-badge.D { background: #FEF3C7; color: #92400E; }
+    .form-badge.L { background: #FEE2E2; color: #991B1B; }
+
+    .rank-num { font-weight: 700; color: var(--gray-500); }
+    .rank-1 { color: #D97706; }
+    .rank-2 { color: var(--gray-500); }
+    .rank-3 { color: #B45309; }
+
+    /* ── Gráficas page ── */
+    .charts-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(440px, 1fr));
+      gap: 20px;
+    }
+    .chart-card {
+      background: white;
+      border: 1px solid var(--gray-200);
+      border-radius: var(--radius);
+      padding: 20px;
+      box-shadow: var(--shadow);
+    }
+    .chart-card h3 {
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 4px;
+      color: var(--gray-900);
+    }
+    .chart-card p { font-size: 12px; color: var(--gray-500); margin-bottom: 16px; }
+    .chart-card canvas { max-height: 320px; }
+
+    /* ── Stats summary row ── */
+    .stats-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+    .stat-card {
+      background: white;
+      border: 1px solid var(--gray-200);
+      border-radius: var(--radius);
+      padding: 14px 16px;
+      box-shadow: var(--shadow);
+      text-align: center;
+    }
+    .stat-card .val { font-size: 28px; font-weight: 800; color: var(--red); }
+    .stat-card .lbl { font-size: 11px; color: var(--gray-500); text-transform: uppercase; letter-spacing: .5px; margin-top: 2px; }
+
+    /* ── Responsive ── */
+    @media (max-width: 768px) {
+      .match-card { grid-template-columns: 1fr; }
+      .charts-grid { grid-template-columns: 1fr; }
+      .lineup-grid { grid-template-columns: 1fr; }
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 48px;
+      color: var(--gray-500);
+      font-size: 14px;
+    }
+
+    #page-actas, #page-resumenes, #page-graficas, #page-jugadores { display: none !important; }
+  </style>
+</head>
+<body>
+
+<header>
+  <img src="Escudo-Romoc.png" alt="Romo F.C" onerror="this.style.display='none'">
+  <h1>Romo F.C</h1>
+  <span class="subtitle">Temporada 2025-2026</span>
+</header>
+
+<nav>
+  <button class="active" onclick="showCategoria(0)">CADETE HONOR BIZKAIA</button>
+  <button onclick="showCategoria(1)">LIGA VASCA JUVENIL</button>
+</nav>
+
+<div id="loading">
+  <div class="spinner"></div>
+  <span>Cargando datos...</span>
+</div>
+
+<!-- ── ACTAS ── -->
+<div class="page" id="page-actas">
+  <div class="filter-bar">
+    <div class="filter-group">
+      <label>Etapa</label>
+      <select id="f-etapa"><option value="">Todas las etapas</option></select>
+    </div>
+    <div class="filter-group">
+      <label>Provincia</label>
+      <select id="f-provincia"><option value="">Todas</option></select>
+    </div>
+    <div class="filter-group wide">
+      <label>Competición</label>
+      <select id="f-competition"><option value="">Todas las competiciones</option></select>
+    </div>
+    <div class="filter-group wide">
+      <label>Equipo</label>
+      <select id="f-team"><option value="">Todos los equipos</option></select>
+    </div>
+    <div class="filter-group">
+      <label>Jornada</label>
+      <select id="f-week"><option value="">Todas</option></select>
+    </div>
+    <div class="filter-group">
+      <label>Desde</label>
+      <input type="date" id="f-date-from">
+    </div>
+    <div class="filter-group">
+      <label>Hasta</label>
+      <input type="date" id="f-date-to">
+    </div>
+    <button class="btn" onclick="applyFilters()">Filtrar</button>
+    <button class="btn secondary" onclick="clearFilters()">Limpiar</button>
+    <button class="btn" id="btn-mis-equipos" onclick="toggleMisEquipos()" style="background:#c8102e;border-color:#c8102e;">MIS EQUIPOS</button>
+    <button class="btn" id="btn-mis-competiciones" onclick="toggleMisCompeticiones()" style="background:#c8102e;border-color:#c8102e;">MIS COMPETICIONES</button>
+  </div>
+
+  <div class="matches-header">
+    <span id="match-count"></span>
+  </div>
+
+  <div id="matches-list"></div>
+  <div id="pagination" class="pagination"></div>
+</div>
+
+<!-- ── RESÚMENES ── -->
+<div class="page" id="page-resumenes">
+  <div class="filter-bar">
+    <div class="filter-group">
+      <label>Etapa</label>
+      <select id="r-etapa"><option value="">Todas las etapas</option></select>
+    </div>
+    <div class="filter-group">
+      <label>Provincia</label>
+      <select id="r-provincia"><option value="">Todas</option></select>
+    </div>
+    <div class="filter-group wide">
+      <label>Competición</label>
+      <select id="r-competition"><option value="">Selecciona una competición</option></select>
+    </div>
+    <div class="filter-group">
+      <label>Filtrar por equipo</label>
+      <input type="text" id="r-team-filter" placeholder="Nombre del equipo..." oninput="renderResumenes()">
+    </div>
+  </div>
+  <div id="resumenes-content"></div>
+</div>
+
+<!-- ── GRÁFICAS ── -->
+<div class="page" id="page-graficas">
+  <div class="filter-bar">
+    <div class="filter-group">
+      <label>Etapa</label>
+      <select id="g-etapa"><option value="">Todas las etapas</option></select>
+    </div>
+    <div class="filter-group">
+      <label>Provincia</label>
+      <select id="g-provincia"><option value="">Todas</option></select>
+    </div>
+    <div class="filter-group wide">
+      <label>Competición (opcional)</label>
+      <select id="g-competition"><option value="">Todas las competiciones</option></select>
+    </div>
+    <div class="filter-group wide">
+      <label>Equipo (opcional)</label>
+      <select id="g-team"><option value="">Todos los equipos</option></select>
+    </div>
+    <button class="btn" onclick="renderGraficas()">Actualizar gráficas</button>
+  </div>
+  <div id="stats-row" class="stats-row"></div>
+  <div id="charts-grid" class="charts-grid"></div>
+</div>
+
+<!-- ── CATEGORÍAS ── -->
+<div class="page" id="page-categorias">
+  <div id="cat-subtabs-bar" style="background:white;border-bottom:2px solid var(--gray-200);padding:0 24px;display:flex;gap:0"></div>
+  <div id="categorias-content" style="padding:20px 24px"></div>
+</div>
+
+<!-- ── JUGADORES ── -->
+<div class="page" id="page-jugadores">
+  <div class="filter-bar">
+    <div class="filter-group">
+      <label>Etapa</label>
+      <select id="j-etapa"><option value="">Todas las etapas</option></select>
+    </div>
+    <div class="filter-group">
+      <label>Provincia</label>
+      <select id="j-provincia"><option value="">Todas</option></select>
+    </div>
+    <div class="filter-group wide">
+      <label>Competición</label>
+      <select id="j-competition"><option value="">Todas las competiciones</option></select>
+    </div>
+    <div class="filter-group wide">
+      <label>Equipo</label>
+      <select id="j-team"><option value="">Todos los equipos</option></select>
+    </div>
+    <div class="filter-group">
+      <label>Mostrar</label>
+      <select id="j-top">
+        <option value="10">Top 10</option>
+        <option value="20">Top 20</option>
+        <option value="50">Top 50</option>
+      </select>
+    </div>
+    <button class="btn" onclick="renderJugadores()">Filtrar</button>
+  </div>
+  <div id="jugadores-content"></div>
+</div>
+
+<!-- ── MODAL ACTA ── -->
+<div class="modal-overlay" id="modal-overlay" onclick="closeModal(event)">
+  <div class="modal" id="modal">
+    <div class="modal-header">
+      <div>
+        <div class="comp-name" id="m-comp"></div>
+        <div class="match-date" id="m-date"></div>
+      </div>
+      <button onclick="closeModalDirect()">✕</button>
+    </div>
+    <div class="modal-score">
+      <div class="modal-team" id="m-home-team"></div>
+      <div class="modal-score-box" id="m-score"></div>
+      <div class="modal-team" id="m-away-team"></div>
+    </div>
+    <div class="modal-body">
+      <div class="modal-info" id="m-info"></div>
+      <div class="modal-section" id="m-goals-section">
+        <h3>⚽ Goles</h3>
+        <div class="event-list" id="m-goals"></div>
+      </div>
+      <div class="modal-section" id="m-cards-section">
+        <h3>🟨 Tarjetas</h3>
+        <div class="event-list" id="m-cards"></div>
+      </div>
+      <div class="modal-section" id="m-lineup-section">
+        <h3>👥 Alineaciones</h3>
+        <div class="lineup-grid" id="m-lineup"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── Data store ──
+const DB = {};
+let charts = {};
+let catCharts = {};
+
+// ── CSV loader ──
+function loadCSV(name) {
+  return new Promise((resolve, reject) => {
+    Papa.parse(name, {
+      download: true,
+      header: true,
+      skipEmptyLines: true,
+      complete: r => resolve(r.data),
+      error: e => reject(e)
+    });
+  });
+}
+
+// ── Init ──
+async function init() {
+  try {
+    const [
+      results, standings, scorers, goals, cards, lineups,
+      teams, players, stadiums, referees, competitions, compSeasons, factMatch,
+      playerStats
+    ] = await Promise.all([
+      loadCSV('agg_results.csv'),
+      loadCSV('agg_standings.csv'),
+      loadCSV('agg_goal_scorers.csv'),
+      loadCSV('fact_goal.csv'),
+      loadCSV('fact_card.csv'),
+      loadCSV('fact_lineup.csv'),
+      loadCSV('dim_team.csv'),
+      loadCSV('dim_player.csv'),
+      loadCSV('dim_stadium.csv'),
+      loadCSV('dim_referee.csv'),
+      loadCSV('dim_competition.csv'),
+      loadCSV('competition_season.csv'),
+      loadCSV('fact_match.csv'),
+      loadCSV('agg_team_player_stats.csv')
+    ]);
+
+    // Build lookup maps
+    DB.teams = Object.fromEntries(teams.map(t => [t.team_id, t]));
+    DB.players = Object.fromEntries(players.map(p => [p.player_id, p]));
+    DB.stadiums = Object.fromEntries(stadiums.map(s => [s.stadium_id, s]));
+    DB.referees = Object.fromEntries(referees.map(r => [r.referee_id, r]));
+
+    // Competitions map by key
+    DB.competitions = Object.fromEntries(competitions.map(c => [c.competition_key, c]));
+    DB.compSeasons = Object.fromEntries(compSeasons.map(c => [`${c.competition_id}-${c.season_id}-${c.group_id}`, c]));
+
+    // Index goals/cards/lineups by match_id
+    DB.goalsByMatch = {};
+    goals.forEach(g => {
+      if (!DB.goalsByMatch[g.match_id]) DB.goalsByMatch[g.match_id] = [];
+      DB.goalsByMatch[g.match_id].push(g);
+    });
+
+    DB.cardsByMatch = {};
+    cards.forEach(c => {
+      if (!DB.cardsByMatch[c.match_id]) DB.cardsByMatch[c.match_id] = [];
+      DB.cardsByMatch[c.match_id].push(c);
+    });
+
+    DB.lineupsByMatch = {};
+    lineups.forEach(l => {
+      if (!DB.lineupsByMatch[l.match_id]) DB.lineupsByMatch[l.match_id] = [];
+      DB.lineupsByMatch[l.match_id].push(l);
+    });
+
+    // Fact match map
+    DB.factMatch = Object.fromEntries(factMatch.map(m => [m.match_id, m]));
+
+    // Player stats
+    DB.playerStats = playerStats;
+
+    // Store main data
+    DB.results = results;
+    DB.standings = standings;
+    DB.scorers = scorers;
+    DB.goals = goals;
+    DB.cards = cards;
+
+    // Distinct competition list (sorted)
+    DB.competitionList = [...new Set(results.map(r => r.competition_key))]
+      .map(key => ({ key, name: DB.competitions[key]?.competition_name || key }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+
+    // Distinct teams (sorted)
+    DB.teamList = Object.values(DB.teams)
+      .filter(t => t.team_name)
+      .sort((a, b) => a.team_name.localeCompare(b.team_name));
+
+    document.getElementById('loading').style.display = 'none';
+    setupFilters();
+    showPage('categorias');
+    renderCategorias();
+
+  } catch(e) {
+    document.getElementById('loading').innerHTML =
+      `<div style="color:#D2001C;text-align:center"><b>Error cargando datos</b><br><small>${e.message}</small><br><small>Asegúrate de servir la app con un servidor HTTP local</small></div>`;
+    console.error(e);
+  }
+}
+
+// ── Filter setup ──
+function setupFilters() {
+  // Populate etapa and provincia options
+  const etapas = [...new Set(Object.values(DB.competitions).map(c => c.etapa).filter(Boolean))].sort();
+  const provincias = [...new Set(Object.values(DB.competitions).map(c => c.provincia).filter(Boolean))].sort();
+
+  ['f-etapa','r-etapa','g-etapa','j-etapa'].forEach(id => {
+    const sel = document.getElementById(id);
+    etapas.forEach(e => { const o = document.createElement('option'); o.value = e; o.textContent = e; sel.appendChild(o); });
+  });
+  ['f-provincia','r-provincia','g-provincia','j-provincia'].forEach(id => {
+    const sel = document.getElementById(id);
+    provincias.forEach(p => { const o = document.createElement('option'); o.value = p; o.textContent = p; sel.appendChild(o); });
+  });
+
+  const compSel = ['f-competition','r-competition','g-competition'];
+  compSel.forEach(id => {
+    const sel = document.getElementById(id);
+    DB.competitionList.forEach(c => {
+      const opt = document.createElement('option');
+      opt.value = c.key;
+      opt.textContent = c.name;
+      sel.appendChild(opt);
+    });
+  });
+
+  const teamSel = ['f-team','g-team'];
+  teamSel.forEach(id => {
+    const sel = document.getElementById(id);
+    DB.teamList.forEach(t => {
+      const opt = document.createElement('option');
+      opt.value = t.team_id;
+      opt.textContent = t.team_name;
+      sel.appendChild(opt);
+    });
+  });
+
+  const weeks = [...new Set(DB.results.map(r => +r.match_week))].filter(Boolean).sort((a,b) => a-b);
+  const wkSel = document.getElementById('f-week');
+  weeks.forEach(w => {
+    const opt = document.createElement('option');
+    opt.value = w;
+    opt.textContent = `Jornada ${w}`;
+    wkSel.appendChild(opt);
+  });
+
+  const rComp = document.getElementById('r-competition');
+  rComp.addEventListener('change', renderResumenes);
+  rComp.value = '22619989-21-22619990';
+
+  // Initial render
+  currentPage = 1;
+  filteredMatches = DB.results;
+  renderMatches();
+  renderGraficas();
+
+  // Jugadores filters
+  const jCompSel = document.getElementById('j-competition');
+  DB.competitionList.forEach(c => {
+    const opt = document.createElement('option');
+    opt.value = c.key; opt.textContent = c.name;
+    jCompSel.appendChild(opt);
+  });
+
+  // Etapa/provincia change listeners — filter competition dropdowns
+  ['r-etapa','r-provincia'].forEach(id => {
+    document.getElementById(id).addEventListener('change', () => { filterCompSelect('r-competition'); renderResumenes(); });
+  });
+  ['g-etapa','g-provincia'].forEach(id => {
+    document.getElementById(id).addEventListener('change', () => { filterCompSelect('g-competition'); renderGraficas(); });
+  });
+  ['j-etapa','j-provincia'].forEach(id => {
+    document.getElementById(id).addEventListener('change', () => { filterCompSelect('j-competition'); renderJugadores(); });
+  });
+  const jTeamSel = document.getElementById('j-team');
+  DB.teamList.forEach(t => {
+    const opt = document.createElement('option');
+    opt.value = t.team_id; opt.textContent = t.team_name;
+    jTeamSel.appendChild(opt);
+  });
+
+  // Activate searchable dropdowns after options are populated
+  ['f-etapa','f-provincia','f-competition','f-team','f-week','r-etapa','r-provincia','r-competition','g-etapa','g-provincia','g-competition','g-team','j-etapa','j-provincia','j-competition','j-team'].forEach(makeSearchable);
+
+  // Auto-filter on change (no need to click Filtrar)
+  ['f-etapa','f-provincia','f-competition','f-team','f-week'].forEach(id => {
+    document.getElementById(id).addEventListener('change', applyFilters);
+  });
+  ['f-date-from','f-date-to'].forEach(id => {
+    document.getElementById(id).addEventListener('change', applyFilters);
+  });
+
+  renderResumenes();
+}
+
+// ── Page navigation ──
+function showPage(name) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.getElementById(`page-${name}`).classList.add('active');
+  if (name === 'resumenes' && !document.getElementById('r-competition').value) {
+    renderResumenes();
+  }
+  if (name === 'jugadores') {
+    renderJugadores();
+  }
+}
+
+function showCategoria(idx) {
+  document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
+  event.currentTarget.classList.add('active');
+  showPage('categorias');
+  catSelectedIdx = idx;
+  catActasPage = 1;
+  renderCategorias();
+}
+
+// ── Actas ──
+let filteredMatches = [];
+let currentPage = 1;
+const PAGE_SIZE = 30;
+
+function filterCompSelect(selectId) {
+  const prefixMap = { 'r-competition': 'r', 'g-competition': 'g', 'j-competition': 'j' };
+  const prefix = prefixMap[selectId] || 'f';
+  const etapa = document.getElementById(`${prefix}-etapa`)?.value || '';
+  const provincia = document.getElementById(`${prefix}-provincia`)?.value || '';
+  const sel = document.getElementById(selectId);
+  const currentVal = sel.value;
+  while (sel.options.length > 1) sel.remove(1);
+  DB.competitionList.forEach(c => {
+    const comp = DB.competitions[c.key];
+    if (etapa && comp?.etapa !== etapa) return;
+    if (provincia && comp?.provincia !== provincia) return;
+    const opt = document.createElement('option');
+    opt.value = c.key; opt.textContent = c.name;
+    sel.appendChild(opt);
+  });
+  sel.value = currentVal;
+  if (ssInstances[selectId]) ssInstances[selectId].sync();
+}
+
+function applyFilters() {
+  const etapa = document.getElementById('f-etapa').value;
+  const provincia = document.getElementById('f-provincia').value;
+  const comp = document.getElementById('f-competition').value;
+  const team = document.getElementById('f-team').value;
+  const week = document.getElementById('f-week').value;
+  const from = document.getElementById('f-date-from').value;
+  const to = document.getElementById('f-date-to').value;
+
+  filteredMatches = DB.results.filter(m => {
+    if (etapa && DB.competitions[m.competition_key]?.etapa !== etapa) return false;
+    if (provincia && DB.competitions[m.competition_key]?.provincia !== provincia) return false;
+    if (comp && m.competition_key !== comp) return false;
+    if (team && m.home_team_id != team && m.away_team_id != team) return false;
+    if (week && m.match_week != week) return false;
+    if (from && m.match_date < from) return false;
+    if (to && m.match_date > to) return false;
+    return true;
+  });
+  currentPage = 1;
+  renderMatches();
+}
+
+function clearFilters() {
+  ['f-etapa','f-provincia','f-competition','f-team','f-week'].forEach(id => document.getElementById(id).value = '');
+  ['f-date-from','f-date-to'].forEach(id => document.getElementById(id).value = '');
+  syncAllSearchable();
+  filteredMatches = DB.results;
+  currentPage = 1;
+  renderMatches();
+  ['btn-mis-equipos', 'btn-mis-competiciones'].forEach(id => {
+    const b = document.getElementById(id);
+    b.style.opacity = '1';
+    b._active = false;
+    b.textContent = id === 'btn-mis-equipos' ? 'MIS EQUIPOS' : 'MIS COMPETICIONES';
+  });
+}
+
+const MIS_EQUIPOS_KEYWORDS = ['romo', 'itzulbatzeta'];
+function isRomo(name) { return !!(name && name.toLowerCase().includes('romo')); }
+// "Mis equipos" = cualquier equipo del club (Romo cadete, Romo F.C. juvenil, Itzulbatzeta, etc.)
+function isMiEquipo(name) { return !!(name && MIS_EQUIPOS_KEYWORDS.some(kw => name.toLowerCase().includes(kw))); }
+
+function toggleMisEquipos() {
+  const btn = document.getElementById('btn-mis-equipos');
+  btn._active = !btn._active;
+  btn.style.opacity = btn._active ? '0.6' : '1';
+  btn.textContent = btn._active ? '★ MIS EQUIPOS' : 'MIS EQUIPOS';
+
+  if (btn._active) {
+    const myTeamIds = new Set(
+      Object.values(DB.teams)
+        .filter(t => MIS_EQUIPOS_KEYWORDS.some(kw => t.team_name.toLowerCase().includes(kw)))
+        .map(t => t.team_id)
+    );
+    const comp = document.getElementById('f-competition').value;
+    filteredMatches = DB.results.filter(m => {
+      if (comp && m.competition_key !== comp) return false;
+      return myTeamIds.has(m.home_team_id) || myTeamIds.has(m.away_team_id);
+    });
+  } else {
+    filteredMatches = DB.results;
+  }
+  currentPage = 1;
+  renderMatches();
+}
+
+const MIS_COMPETICIONES_KEYWORDS = ['cadete honor bizkaia', 'liga vasca juvenil'];
+
+function toggleMisCompeticiones() {
+  const btn = document.getElementById('btn-mis-competiciones');
+  btn._active = !btn._active;
+  btn.style.opacity = btn._active ? '0.6' : '1';
+  btn.textContent = btn._active ? '★ MIS COMPETICIONES' : 'MIS COMPETICIONES';
+
+  if (btn._active) {
+    const myCompKeys = new Set(
+      Object.values(DB.competitions)
+        .filter(c => MIS_COMPETICIONES_KEYWORDS.some(kw => c.competition_name.toLowerCase().includes(kw)))
+        .map(c => c.competition_key)
+    );
+    filteredMatches = DB.results.filter(m => myCompKeys.has(m.competition_key));
+  } else {
+    filteredMatches = DB.results;
+  }
+  currentPage = 1;
+  renderMatches();
+}
+
+function renderMatches() {
+  const total = filteredMatches.length;
+  document.getElementById('match-count').textContent = `${total.toLocaleString()} partidos`;
+
+  const start = (currentPage - 1) * PAGE_SIZE;
+  const page = filteredMatches.slice(start, start + PAGE_SIZE);
+
+  const list = document.getElementById('matches-list');
+  list.innerHTML = page.map(m => matchCard(m)).join('');
+
+  renderPagination(total);
+}
+
+function matchCard(m) {
+  const comp = DB.competitions[m.competition_key];
+  const compName = comp?.competition_name || '';
+  const date = m.match_date ? new Date(m.match_date).toLocaleDateString('es-ES', {day:'2-digit',month:'short',year:'numeric'}) : '';
+  const time = m.kick_off ? m.kick_off.slice(0,5) : '';
+
+  const homeCrest = m.home_crest_url || '';
+  const awayCrest = m.away_crest_url || '';
+
+  const resultBadge = m.home_result
+    ? `<span class="badge ${m.home_result}">${m.home_result === 'W' ? 'V' : m.home_result === 'D' ? 'E' : 'D'}</span>`
+    : '';
+
+  return `<div class="match-card" onclick="openModal('${m.match_id}')">
+    <div class="match-meta">
+      <strong>${date}</strong>
+      ${time} · J${m.match_week || '-'}
+      ${resultBadge}
+    </div>
+    <div class="team-cell">
+      <img src="${homeCrest}" alt="" onerror="this.style.display='none'">
+      <span>${m.home_team_name || ''}</span>
+    </div>
+    <div class="score-box">
+      <span>${m.home_score ?? '-'}</span>
+      <span class="sep">:</span>
+      <span>${m.away_score ?? '-'}</span>
+    </div>
+    <div class="team-cell away">
+      <img src="${awayCrest}" alt="" onerror="this.style.display='none'">
+      <span>${m.away_team_name || ''}</span>
+    </div>
+    <div class="match-comp" title="${compName}">${compName}</div>
+  </div>`;
+}
+
+function renderPagination(total) {
+  const totalPages = Math.ceil(total / PAGE_SIZE);
+  const pag = document.getElementById('pagination');
+
+  if (totalPages <= 1) { pag.innerHTML = ''; return; }
+
+  let html = '';
+  html += `<button onclick="goPage(${currentPage-1})" ${currentPage===1?'disabled':''}>‹</button>`;
+
+  const range = [];
+  for (let i = Math.max(1, currentPage-2); i <= Math.min(totalPages, currentPage+2); i++) range.push(i);
+  if (range[0] > 1) { html += `<button onclick="goPage(1)">1</button>`; if (range[0] > 2) html += `<span style="padding:0 4px">…</span>`; }
+  range.forEach(i => {
+    html += `<button class="${i===currentPage?'active':''}" onclick="goPage(${i})">${i}</button>`;
+  });
+  if (range[range.length-1] < totalPages) {
+    if (range[range.length-1] < totalPages-1) html += `<span style="padding:0 4px">…</span>`;
+    html += `<button onclick="goPage(${totalPages})">${totalPages}</button>`;
+  }
+  html += `<button onclick="goPage(${currentPage+1})" ${currentPage===totalPages?'disabled':''}>›</button>`;
+
+  pag.innerHTML = html;
+}
+
+function goPage(p) {
+  currentPage = p;
+  renderMatches();
+  document.getElementById('page-actas').scrollTo(0,0);
+  window.scrollTo(0,0);
+}
+
+// ── Modal ──
+function openModal(matchId) {
+  const m = DB.results.find(r => r.match_id == matchId) || DB.factMatch[matchId];
+  if (!m) return;
+
+  const fm = DB.factMatch[matchId] || {};
+  const comp = DB.competitions[m.competition_key];
+
+  document.getElementById('m-comp').textContent = comp?.competition_name || m.competition_key || '';
+  const date = m.match_date ? new Date(m.match_date).toLocaleDateString('es-ES', {weekday:'long',day:'2-digit',month:'long',year:'numeric'}) : '';
+  const time = m.kick_off ? m.kick_off.slice(0,5) : '';
+  document.getElementById('m-date').textContent = `${date} ${time ? '· ' + time : ''}`;
+
+  // Score
+  document.getElementById('m-score').innerHTML =
+    `<span>${m.home_score ?? '-'}</span><span class="sep">:</span><span>${m.away_score ?? '-'}</span>`;
+
+  // Teams
+  const homeCrest = m.home_crest_url || '';
+  const awayCrest = m.away_crest_url || '';
+  document.getElementById('m-home-team').innerHTML =
+    `<img src="${homeCrest}" onerror="this.style.display='none'"><span>${m.home_team_name || ''}</span>`;
+  document.getElementById('m-away-team').innerHTML =
+    `<img src="${awayCrest}" onerror="this.style.display='none'"><span>${m.away_team_name || ''}</span>`;
+
+  // Info
+  const stadium = DB.stadiums[fm.stadium_id];
+  const referee = DB.referees[fm.referee_id];
+  let infoHtml = '';
+  if (stadium) infoHtml += `<div class="info-item"><span>Estadio</span><br>${stadium.stadium_name}${stadium.city ? ', '+stadium.city : ''}</div>`;
+  if (referee) infoHtml += `<div class="info-item"><span>Árbitro</span><br>${referee.referee_name}</div>`;
+  if (m.match_week) infoHtml += `<div class="info-item"><span>Jornada</span><br>${m.match_week}</div>`;
+  document.getElementById('m-info').innerHTML = infoHtml;
+
+  // Goals
+  const matchGoals = (DB.goalsByMatch[matchId] || []).sort((a,b) => +a.minute - +b.minute);
+  const goalsEl = document.getElementById('m-goals');
+  if (matchGoals.length === 0) {
+    goalsEl.innerHTML = '<div style="color:#6B7280;font-size:13px;padding:4px 8px">Sin goles registrados</div>';
+  } else {
+    goalsEl.innerHTML = matchGoals.map(g => {
+      const player = DB.players[g.scorer_player_id];
+      const playerName = player?.player_name || (g.scorer_player_id ? g.scorer_player_id : 'Desconocido');
+      const team = g.scoring_team_id == m.home_team_id ? m.home_team_name : m.away_team_name;
+      const icon = g.is_own_goal == '1' ? '⚽🔴' : g.is_penalty == '1' ? '⚽(P)' : '⚽';
+      const type = g.is_own_goal == '1' ? ' (p.p.)' : g.is_penalty == '1' ? ' (pen.)' : '';
+      return `<div class="event-item"><span class="min">${g.minute}'</span><span class="icon">${icon}</span><span>${playerName}${type}</span><span class="team-tag">${team||''}</span></div>`;
+    }).join('');
+  }
+
+  // Cards
+  const matchCards = (DB.cardsByMatch[matchId] || []).sort((a,b) => +a.minute - +b.minute);
+  const cardsEl = document.getElementById('m-cards');
+  if (matchCards.length === 0) {
+    cardsEl.innerHTML = '<div style="color:#6B7280;font-size:13px;padding:4px 8px">Sin tarjetas registradas</div>';
+  } else {
+    cardsEl.innerHTML = matchCards.map(c => {
+      const player = DB.players[c.player_id];
+      const playerName = player?.player_name || (c.player_id ? c.player_id : 'Desconocido');
+      const team = c.team_id == m.home_team_id ? m.home_team_name : m.away_team_name;
+      const icon = c.is_red == '1' ? '🟥' : c.is_second_yellow == '1' ? '🟨🟥' : '🟨';
+      return `<div class="event-item"><span class="min">${c.minute}'</span><span class="icon">${icon}</span><span>${playerName}</span><span class="team-tag">${team||''}</span></div>`;
+    }).join('');
+  }
+
+  // Lineups
+  const matchLineups = DB.lineupsByMatch[matchId] || [];
+  const homeLineup = matchLineups.filter(l => l.team_id == m.home_team_id);
+  const awayLineup = matchLineups.filter(l => l.team_id == m.away_team_id);
+
+  function lineupHtml(lineup, teamName) {
+    if (!lineup.length) return `<div style="color:#6B7280;font-size:12px">Sin datos</div>`;
+    const starters = lineup.filter(l => l.is_starter === 'True' || l.is_starter === '1' || l.is_starter === true).sort((a,b) => +a.jersey_number - +b.jersey_number);
+    const subs = lineup.filter(l => l.is_starter !== 'True' && l.is_starter !== '1' && l.is_starter !== true).sort((a,b) => +a.jersey_number - +b.jersey_number);
+
+    const playerRow = (l, isSub) => {
+      const p = DB.players[l.player_id];
+      const name = p?.player_name || l.player_id || '-';
+      return `<div class="lineup-player ${isSub?'sub':''}"><span class="num">${l.jersey_number||'-'}</span><span>${name}</span></div>`;
+    };
+
+    return `<h4>${teamName}</h4>
+      ${starters.map(l => playerRow(l, false)).join('')}
+      ${subs.length ? `<div style="font-size:11px;color:#6B7280;margin:6px 0 4px;padding-left:6px">Suplentes</div>${subs.map(l => playerRow(l, true)).join('')}` : ''}`;
+  }
+
+  document.getElementById('m-lineup').innerHTML =
+    `<div class="lineup-col">${lineupHtml(homeLineup, m.home_team_name||'Local')}</div>
+     <div class="lineup-col">${lineupHtml(awayLineup, m.away_team_name||'Visitante')}</div>`;
+
+  document.getElementById('modal-overlay').classList.add('open');
+}
+
+function closeModal(e) {
+  if (e.target === document.getElementById('modal-overlay')) closeModalDirect();
+}
+function closeModalDirect() {
+  document.getElementById('modal-overlay').classList.remove('open');
+}
+
+// ── Resúmenes ──
+function renderResumenes() {
+  const rEtapa = document.getElementById('r-etapa')?.value || '';
+  const rProvincia = document.getElementById('r-provincia')?.value || '';
+  const compKey = document.getElementById('r-competition').value;
+  const teamFilter = (document.getElementById('r-team-filter').value || '').toLowerCase();
+  const container = document.getElementById('resumenes-content');
+
+  if (!compKey) {
+    container.innerHTML = '<div class="empty-state">Selecciona una competición para ver los resúmenes</div>';
+    return;
+  }
+
+  // Standings
+  let standings = DB.standings.filter(s => s.competition_key === compKey);
+  if (teamFilter) standings = standings.filter(s => s.team_name.toLowerCase().includes(teamFilter));
+  standings.sort((a,b) => +a.rank - +b.rank);
+
+  // Top scorers
+  let scorers = DB.scorers.filter(s => s.competition_key === compKey);
+  if (teamFilter) scorers = scorers.filter(s => s.team_name.toLowerCase().includes(teamFilter));
+  scorers.sort((a,b) => +b.goals - +a.goals);
+  scorers = scorers.slice(0, 20);
+
+  // Recent results
+  let results = DB.results.filter(r => r.competition_key === compKey);
+  if (teamFilter) results = results.filter(r =>
+    r.home_team_name.toLowerCase().includes(teamFilter) ||
+    r.away_team_name.toLowerCase().includes(teamFilter)
+  );
+  results.sort((a,b) => b.match_date.localeCompare(a.match_date));
+  const recentResults = results.slice(0, 10);
+
+  let html = '';
+
+  // Stats summary
+  if (standings.length) {
+    const totalGames = standings.reduce((s,t) => s + +t.played, 0) / 2;
+    const totalGoals = standings.reduce((s,t) => s + +t.goals_for, 0) / 2;
+    html += `<div class="stats-row">
+      <div class="stat-card"><div class="val">${standings.length}</div><div class="lbl">Equipos</div></div>
+      <div class="stat-card"><div class="val">${Math.round(totalGames)}</div><div class="lbl">Partidos</div></div>
+      <div class="stat-card"><div class="val">${Math.round(totalGoals)}</div><div class="lbl">Goles</div></div>
+      <div class="stat-card"><div class="val">${totalGames > 0 ? (totalGoals/totalGames).toFixed(1) : '-'}</div><div class="lbl">Goles/partido</div></div>
+    </div>`;
+  }
+
+  // Standings table
+  if (standings.length) {
+    html += `<div class="section-card">
+      <div class="section-card-header">📊 Clasificación</div>
+      <table>
+        <thead><tr>
+          <th>#</th><th>Equipo</th>
+          <th class="num">PJ</th><th class="num">G</th><th class="num">E</th><th class="num">P</th>
+          <th class="num">GF</th><th class="num">GC</th><th class="num">DG</th>
+          <th class="num">Pts</th><th>Forma</th>
+        </tr></thead>
+        <tbody>
+          ${standings.map(t => `<tr class="${isRomo(t.team_name)?'romo-row':''}">
+            <td><span class="rank-num ${t.rank<=3?'rank-'+t.rank:''}">${t.rank}</span></td>
+            <td><div class="team-with-crest"><img src="${t.crest_url||''}" onerror="this.style.display='none'" style="width:20px;height:20px;object-fit:contain"><span>${t.team_name}</span></div></td>
+            <td class="num">${t.played}</td>
+            <td class="num">${t.won}</td>
+            <td class="num">${t.drawn}</td>
+            <td class="num">${t.lost}</td>
+            <td class="num">${t.goals_for}</td>
+            <td class="num">${t.goals_against}</td>
+            <td class="num">${t.goal_diff > 0 ? '+'+t.goal_diff : t.goal_diff}</td>
+            <td class="num bold">${t.points}</td>
+            <td><div class="form-badges">${(t.form||'').split('').map(f => `<span class="form-badge ${f}">${f==='W'?'V':f==='D'?'E':'D'}</span>`).join('')}</div></td>
+          </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>`;
+  }
+
+  // Top scorers
+  if (scorers.length) {
+    html += `<div class="section-card">
+      <div class="section-card-header">⚽ Máximos goleadores</div>
+      <table>
+        <thead><tr>
+          <th>#</th><th>Jugador</th><th>Equipo</th>
+          <th class="num">Goles</th><th class="num">Pen.</th><th class="num">P.P.</th>
+        </tr></thead>
+        <tbody>
+          ${scorers.map((s,i) => `<tr class="${isRomo(s.team_name)?'romo-row':''}">
+            <td class="rank-num">${i+1}</td>
+            <td>${s.player_name}</td>
+            <td><div class="team-with-crest"><img src="${s.crest_url||''}" onerror="this.style.display='none'" style="width:20px;height:20px;object-fit:contain"><span>${s.team_name}</span></div></td>
+            <td class="num bold">${s.goals}</td>
+            <td class="num">${s.penalties||0}</td>
+            <td class="num">${s.own_goals||0}</td>
+          </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>`;
+  }
+
+  // Recent results
+  if (recentResults.length) {
+    html += `<div class="section-card">
+      <div class="section-card-header">🕐 Últimos resultados</div>
+      <div style="padding:12px">
+        ${recentResults.map(m => `
+          <div class="match-card${isRomo(m.home_team_name)||isRomo(m.away_team_name)?' romo-match':''}" onclick="openModal('${m.match_id}')" style="margin-bottom:6px">
+            <div class="match-meta"><strong>${m.match_date ? new Date(m.match_date).toLocaleDateString('es-ES',{day:'2-digit',month:'short'}) : ''}</strong>J${m.match_week||'-'}</div>
+            <div class="team-cell"><img src="${m.home_crest_url||''}" onerror="this.style.display='none'"><span>${m.home_team_name}</span></div>
+            <div class="score-box"><span>${m.home_score??'-'}</span><span class="sep">:</span><span>${m.away_score??'-'}</span></div>
+            <div class="team-cell away"><img src="${m.away_crest_url||''}" onerror="this.style.display='none'"><span>${m.away_team_name}</span></div>
+            <div></div>
+          </div>`).join('')}
+      </div>
+    </div>`;
+  }
+
+  if (!html) {
+    html = '<div class="empty-state">No hay datos para esta competición</div>';
+  }
+
+  container.innerHTML = html;
+}
+
+// ── Gráficas ──
+function renderGraficas() {
+  const compKey = document.getElementById('g-competition').value;
+  const teamId = document.getElementById('g-team').value;
+
+  // Destroy existing charts
+  Object.values(charts).forEach(c => c.destroy());
+  charts = {};
+
+  const gEtapa = document.getElementById('g-etapa').value;
+  const gProvincia = document.getElementById('g-provincia').value;
+
+  let results = DB.results;
+  if (compKey) results = results.filter(r => r.competition_key === compKey);
+  else {
+    if (gEtapa) results = results.filter(r => DB.competitions[r.competition_key]?.etapa === gEtapa);
+    if (gProvincia) results = results.filter(r => DB.competitions[r.competition_key]?.provincia === gProvincia);
+  }
+  if (teamId) results = results.filter(r => r.home_team_id == teamId || r.away_team_id == teamId);
+
+  let goals = DB.goals;
+  if (compKey) goals = goals.filter(g => g.competition_key === compKey);
+  else {
+    if (gEtapa) goals = goals.filter(g => DB.competitions[g.competition_key]?.etapa === gEtapa);
+    if (gProvincia) goals = goals.filter(g => DB.competitions[g.competition_key]?.provincia === gProvincia);
+  }
+
+  let cards = DB.cards;
+  if (compKey) cards = cards.filter(c => c.competition_key === compKey);
+  else {
+    if (gEtapa) cards = cards.filter(c => DB.competitions[c.competition_key]?.etapa === gEtapa);
+    if (gProvincia) cards = cards.filter(c => DB.competitions[c.competition_key]?.provincia === gProvincia);
+  }
+
+  // Stats
+  const totalMatches = results.length;
+  const totalGoals = results.reduce((s,m) => s + (+m.home_score||0) + (+m.away_score||0), 0);
+  const totalCards = cards.length;
+  const avgGoals = totalMatches > 0 ? (totalGoals / totalMatches).toFixed(2) : 0;
+
+  document.getElementById('stats-row').innerHTML = `
+    <div class="stat-card"><div class="val">${totalMatches.toLocaleString()}</div><div class="lbl">Partidos</div></div>
+    <div class="stat-card"><div class="val">${totalGoals.toLocaleString()}</div><div class="lbl">Goles totales</div></div>
+    <div class="stat-card"><div class="val">${avgGoals}</div><div class="lbl">Goles/partido</div></div>
+    <div class="stat-card"><div class="val">${totalCards.toLocaleString()}</div><div class="lbl">Tarjetas</div></div>
+  `;
+
+  const grid = document.getElementById('charts-grid');
+  grid.innerHTML = `
+    <div class="chart-card"><h3>Resultados por jornada</h3><p>Goles marcados por jornada</p><canvas id="ch-goals-round"></canvas></div>
+    <div class="chart-card"><h3>Distribución de resultados</h3><p>Victorias locales, empates y victorias visitantes</p><canvas id="ch-results"></canvas></div>
+    <div class="chart-card"><h3>Top 15 goleadores</h3><p>${compKey ? 'En esta competición' : 'Global'}</p><canvas id="ch-scorers"></canvas></div>
+    <div class="chart-card"><h3>Tarjetas por tipo</h3><p>Amarillas, rojas y dobles amarillas</p><canvas id="ch-cards"></canvas></div>
+    <div class="chart-card"><h3>Goles por minuto</h3><p>Distribución de goles a lo largo del partido</p><canvas id="ch-goals-min"></canvas></div>
+    <div class="chart-card"><h3>Top 10 equipos goleadores</h3><p>Equipos que más goles han marcado</p><canvas id="ch-teams"></canvas></div>
+  `;
+
+  // 1. Goals per round
+  const goalsByRound = {};
+  results.forEach(m => {
+    const w = m.match_week;
+    if (!w) return;
+    if (!goalsByRound[w]) goalsByRound[w] = 0;
+    goalsByRound[w] += (+m.home_score||0) + (+m.away_score||0);
+  });
+  const rounds = Object.keys(goalsByRound).map(Number).sort((a,b) => a-b);
+  charts.goalsRound = new Chart(document.getElementById('ch-goals-round'), {
+    type: 'bar',
+    data: {
+      labels: rounds.map(r => `J${r}`),
+      datasets: [{ label: 'Goles', data: rounds.map(r => goalsByRound[r]),
+        backgroundColor: '#D2001C', borderRadius: 4 }]
+    },
+    options: { plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
+  });
+
+  // 2. Results distribution
+  let wins = 0, draws = 0, losses = 0;
+  results.forEach(m => {
+    const hs = +m.home_score, as = +m.away_score;
+    if (isNaN(hs) || isNaN(as)) return;
+    if (hs > as) wins++;
+    else if (hs === as) draws++;
+    else losses++;
+  });
+  charts.results = new Chart(document.getElementById('ch-results'), {
+    type: 'doughnut',
+    data: {
+      labels: ['Victoria local', 'Empate', 'Victoria visitante'],
+      datasets: [{ data: [wins, draws, losses],
+        backgroundColor: ['#D2001C', '#6B7280', '#374151'],
+        borderWidth: 0 }]
+    },
+    options: { plugins: { legend: { position: 'bottom' } } }
+  });
+
+  // 3. Top scorers
+  const scorerMap = {};
+  goals.forEach(g => {
+    if (!g.scorer_player_id || g.is_own_goal === '1') return;
+    if (!scorerMap[g.scorer_player_id]) scorerMap[g.scorer_player_id] = 0;
+    scorerMap[g.scorer_player_id]++;
+  });
+  const scorerTeam = {};
+  DB.scorers.forEach(s => { if (s.player_name) scorerTeam[s.player_name] = s.team_name; });
+  const topScorers = Object.entries(scorerMap)
+    .sort((a,b) => b[1]-a[1]).slice(0,15)
+    .map(([id, gls]) => { const name = DB.players[id]?.player_name || id; return { name, goals: gls, team: scorerTeam[name] || '' }; });
+  charts.scorers = new Chart(document.getElementById('ch-scorers'), {
+    type: 'bar',
+    data: {
+      labels: topScorers.map(s => s.name.split(',')[0]),
+      datasets: [{ label: 'Goles', data: topScorers.map(s => s.goals),
+        backgroundColor: topScorers.map(s => isRomo(s.team) ? '#F59E0B' : '#D2001C'), borderRadius: 4 }]
+    },
+    options: {
+      indexAxis: 'y',
+      plugins: { legend: { display: false } },
+      scales: { x: { beginAtZero: true } }
+    }
+  });
+
+  // 4. Cards breakdown
+  const yellows = cards.filter(c => c.is_yellow === '1' && c.is_second_yellow !== '1').length;
+  const reds = cards.filter(c => c.is_red === '1' && c.is_second_yellow !== '1').length;
+  const secondYellow = cards.filter(c => c.is_second_yellow === '1').length;
+  charts.cards = new Chart(document.getElementById('ch-cards'), {
+    type: 'pie',
+    data: {
+      labels: ['Amarillas', 'Rojas directas', 'Doble amarilla'],
+      datasets: [{ data: [yellows, reds, secondYellow],
+        backgroundColor: ['#F59E0B', '#111111', '#F97316'],
+        borderWidth: 0 }]
+    },
+    options: { plugins: { legend: { position: 'bottom' } } }
+  });
+
+  // 5. Goals by minute range
+  const minuteBuckets = { '1-15':0,'16-30':0,'31-45':0,'46-60':0,'61-75':0,'76-90':0,'90+':0 };
+  goals.forEach(g => {
+    const min = +g.minute;
+    if (isNaN(min)) return;
+    if (min <= 15) minuteBuckets['1-15']++;
+    else if (min <= 30) minuteBuckets['16-30']++;
+    else if (min <= 45) minuteBuckets['31-45']++;
+    else if (min <= 60) minuteBuckets['46-60']++;
+    else if (min <= 75) minuteBuckets['61-75']++;
+    else if (min <= 90) minuteBuckets['76-90']++;
+    else minuteBuckets['90+']++;
+  });
+  charts.goalsMin = new Chart(document.getElementById('ch-goals-min'), {
+    type: 'bar',
+    data: {
+      labels: Object.keys(minuteBuckets),
+      datasets: [{ label: 'Goles', data: Object.values(minuteBuckets),
+        backgroundColor: '#D2001C', borderRadius: 4 }]
+    },
+    options: { plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
+  });
+
+  // 6. Top scoring teams
+  const teamGoals = {};
+  results.forEach(m => {
+    if (!teamGoals[m.home_team_name]) teamGoals[m.home_team_name] = 0;
+    if (!teamGoals[m.away_team_name]) teamGoals[m.away_team_name] = 0;
+    teamGoals[m.home_team_name] += (+m.home_score||0);
+    teamGoals[m.away_team_name] += (+m.away_score||0);
+  });
+  const topTeams = Object.entries(teamGoals)
+    .filter(([n]) => n)
+    .sort((a,b) => b[1]-a[1]).slice(0,10);
+  charts.teams = new Chart(document.getElementById('ch-teams'), {
+    type: 'bar',
+    data: {
+      labels: topTeams.map(t => t[0]),
+      datasets: [{ label: 'Goles marcados', data: topTeams.map(t => t[1]),
+        backgroundColor: topTeams.map(t => isRomo(t[0]) ? '#F59E0B' : '#D2001C'), borderRadius: 4 }]
+    },
+    options: {
+      indexAxis: 'y',
+      plugins: { legend: { display: false } },
+      scales: { x: { beginAtZero: true } }
+    }
+  });
+}
+
+// ── Categorías ──
+const CATEGORIAS_NAMES = ['cadete honor bizkaia', 'liga vasca juvenil'];
+const CATEGORIAS_LABELS = ['CADETE HONOR BIZKAIA', 'LIGA VASCA JUVENIL'];
+let catSelectedIdx = 0;
+let catSubTab = 'clasificacion';
+let catActasPage = 1;
+const CAT_ACTAS_PAGE_SIZE = 20;
+let catDashPlayerSearch = '';   // texto de búsqueda de jugador en el dashboard
+let catEqTopN = 0;              // 0 = todos los equipos en gráficas de datos equipos
+let catDashTeam = '';           // equipo seleccionado en el dashboard
+let catDashMis = false;         // botón "MIS JUGADORES" (solo Romo)
+let catDashSelectedId = '';     // jugador seleccionado en el dashboard
+let catDashFocus = false;       // restaurar foco en el buscador tras re-render
+
+// ── Filtros del subtab "Ranking jugadores" ──
+let catRankTeam = '';      // equipo seleccionado (team_name)
+let catRankPlayerQ = '';   // texto de búsqueda de jugador
+let catRankMis = false;    // botón "Mis equipos" (solo Romo)
+let catRankFocus = false;  // restaurar foco en el input tras re-render
+
+const CAT_SUBTABS = [
+  { key: 'clasificacion',    label: '📊 Clasificación' },
+  { key: 'actas',            label: '📋 Actas' },
+  { key: 'ranking',          label: '🏅 Ranking jugadores' },
+  { key: 'equipos',          label: '🛡️ Datos equipos' },
+  { key: 'dashboard',        label: '👤 Dashboard jugador' },
+  { key: 'graficas',         label: '📈 Gráficas' },
+];
+
+function selectCategoria(idx) {
+  catSelectedIdx = idx;
+  catActasPage = 1;
+  renderCategorias();
+}
+
+function selectCatSubTab(key) {
+  catSubTab = key;
+  catActasPage = 1;
+  renderCategorias();
+}
+
+function renderCategorias() {
+  Object.values(catCharts).forEach(c => c.destroy());
+  catCharts = {};
+
+  // Sub-tab bar
+  const bar = document.getElementById('cat-subtabs-bar');
+  if (bar) {
+    bar.innerHTML = CAT_SUBTABS.map(t => {
+      const active = t.key === catSubTab;
+      return `<button onclick="selectCatSubTab('${t.key}')" style="
+        padding:12px 18px;font-size:13px;font-weight:600;border:none;border-bottom:3px solid ${active?'#D2001C':'transparent'};
+        background:none;color:${active?'#D2001C':'#6B7280'};cursor:pointer;white-space:nowrap;transition:all .15s;letter-spacing:.3px
+      ">${t.label}</button>`;
+    }).join('');
+  }
+
+  const allComps = DB.competitionList.filter(c =>
+    CATEGORIAS_NAMES.some(t => c.name.toLowerCase().includes(t))
+  );
+  const comp = allComps.find(c => c.name.toLowerCase().includes(CATEGORIAS_NAMES[catSelectedIdx]));
+  const el = document.getElementById('categorias-content');
+
+  if (!comp) {
+    el.innerHTML = '<div class="empty-state">No se encontraron las competiciones configuradas.</div>';
+    return;
+  }
+
+  const k = comp.key;
+  const standings = DB.standings.filter(s => s.competition_key === k).sort((a,b) => +a.rank - +b.rank);
+  const scorers   = DB.scorers.filter(s => s.competition_key === k).sort((a,b) => +b.goals - +a.goals);
+  const results   = DB.results.filter(r => r.competition_key === k).sort((a,b) => b.match_date.localeCompare(a.match_date));
+  const goals     = DB.goals.filter(g => g.competition_key === k);
+  const cards     = DB.cards.filter(c => c.competition_key === k);
+  const totalGames = results.length;
+  const totalGoals = results.reduce((s,m) => s + (+m.home_score||0) + (+m.away_score||0), 0);
+  const avgGoals   = totalGames > 0 ? (totalGoals / totalGames).toFixed(2) : '-';
+
+  // Stats summary bar
+  const summaryHtml = `
+    <div class="stats-row" style="margin-bottom:20px">
+      <div class="stat-card"><div class="val">${standings.length||'—'}</div><div class="lbl">Equipos</div></div>
+      <div class="stat-card"><div class="val">${totalGames||'—'}</div><div class="lbl">Partidos</div></div>
+      <div class="stat-card"><div class="val">${totalGoals}</div><div class="lbl">Goles</div></div>
+      <div class="stat-card"><div class="val">${avgGoals}</div><div class="lbl">Goles/partido</div></div>
+      <div class="stat-card"><div class="val">${cards.length}</div><div class="lbl">Tarjetas</div></div>
+    </div>`;
+
+  if (catSubTab === 'clasificacion') {
+    el.innerHTML = summaryHtml + `
+      <div class="section-card">
+        <div class="section-card-header">📊 Clasificación — ${comp.name}</div>
+        <table>
+          <thead><tr>
+            <th>#</th><th>Equipo</th>
+            <th class="num">PJ</th><th class="num">G</th><th class="num">E</th><th class="num">P</th>
+            <th class="num">GF</th><th class="num">GC</th><th class="num">DG</th>
+            <th class="num">Pts</th><th>Forma</th>
+          </tr></thead>
+          <tbody>
+            ${standings.map(t => `<tr class="${isRomo(t.team_name)?'romo-row':''}">
+              <td><span class="rank-num ${t.rank<=3?'rank-'+t.rank:''}">${t.rank}</span></td>
+              <td><div class="team-with-crest"><img src="${t.crest_url||''}" onerror="this.style.display='none'" style="width:20px;height:20px;object-fit:contain"><span>${t.team_name}${isRomo(t.team_name)?'<span style="margin-left:6px;font-size:10px;background:#F59E0B;color:#111;padding:1px 6px;border-radius:4px;font-weight:700">ROMO</span>':''}</span></div></td>
+              <td class="num">${t.played}</td><td class="num">${t.won}</td><td class="num">${t.drawn}</td><td class="num">${t.lost}</td>
+              <td class="num">${t.goals_for}</td><td class="num">${t.goals_against}</td>
+              <td class="num">${t.goal_diff > 0 ? '+'+t.goal_diff : t.goal_diff}</td>
+              <td class="num bold">${t.points}</td>
+              <td><div class="form-badges">${(t.form||'').split('').map(f=>`<span class="form-badge ${f}">${f==='W'?'V':f==='D'?'E':'D'}</span>`).join('')}</div></td>
+            </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>`;
+    return;
+  }
+
+  if (catSubTab === 'actas') {
+    const q = (document.getElementById('cat-actas-search')?.value || '').toLowerCase().trim();
+    let filtered = results;
+    if (q) filtered = filtered.filter(m =>
+      m.home_team_name.toLowerCase().includes(q) || m.away_team_name.toLowerCase().includes(q)
+    );
+    const total = filtered.length;
+    const pages = Math.ceil(total / CAT_ACTAS_PAGE_SIZE);
+    const slice = filtered.slice((catActasPage-1)*CAT_ACTAS_PAGE_SIZE, catActasPage*CAT_ACTAS_PAGE_SIZE);
+
+    const paginationHtml = pages > 1 ? `<div style="display:flex;gap:6px;align-items:center;justify-content:center;padding:12px 0">
+      ${catActasPage > 1 ? `<button class="btn secondary" onclick="catActasPage--;renderCategorias()">← Anterior</button>` : ''}
+      <span style="font-size:13px;color:#6B7280">Página ${catActasPage} / ${pages} (${total} partidos)</span>
+      ${catActasPage < pages ? `<button class="btn secondary" onclick="catActasPage++;renderCategorias()">Siguiente →</button>` : ''}
+    </div>` : `<div style="padding:8px 0;font-size:13px;color:#6B7280">${total} partidos</div>`;
+
+    el.innerHTML = summaryHtml + `
+      <div class="section-card">
+        <div class="section-card-header">📋 Actas — ${comp.name}</div>
+        <div style="padding:12px;border-bottom:1px solid var(--gray-200);display:flex;gap:10px;align-items:center">
+          <input type="text" id="cat-actas-search" placeholder="Buscar equipo..." value="${q}"
+            oninput="catActasPage=1;renderCategorias()"
+            style="padding:7px 12px;border:1px solid var(--gray-300);border-radius:6px;font-size:13px;width:220px">
+          ${q ? `<button class="btn secondary" onclick="document.getElementById('cat-actas-search').value='';catActasPage=1;renderCategorias()">Limpiar</button>` : ''}
+        </div>
+        ${paginationHtml}
+        <div style="padding:8px 12px">
+          ${slice.map(m => `
+            <div class="match-card${isRomo(m.home_team_name)||isRomo(m.away_team_name)?' romo-match':''}" onclick="openModal('${m.match_id}')" style="margin-bottom:6px">
+              <div class="match-meta"><strong>${m.match_date ? new Date(m.match_date).toLocaleDateString('es-ES',{day:'2-digit',month:'short'}) : ''}</strong> J${m.match_week||'-'}</div>
+              <div class="team-cell"><img src="${m.home_crest_url||''}" onerror="this.style.display='none'"><span>${m.home_team_name}${isRomo(m.home_team_name)?'<span style="margin-left:4px;font-size:10px;background:#F59E0B;color:#111;padding:1px 5px;border-radius:3px;font-weight:700">ROMO</span>':''}</span></div>
+              <div class="score-box"><span>${m.home_score??'-'}</span><span class="sep">:</span><span>${m.away_score??'-'}</span></div>
+              <div class="team-cell away"><img src="${m.away_crest_url||''}" onerror="this.style.display='none'"><span>${m.away_team_name}${isRomo(m.away_team_name)?'<span style="margin-left:4px;font-size:10px;background:#F59E0B;color:#111;padding:1px 5px;border-radius:3px;font-weight:700">ROMO</span>':''}</span></div>
+              <div></div>
+            </div>`).join('')}
+        </div>
+        ${paginationHtml}
+      </div>`;
+    return;
+  }
+
+  if (catSubTab === 'ranking') {
+    // Lista de equipos de la competición (para el desplegable de filtro)
+    const teamNames = [...new Set(standings.map(s => s.team_name).filter(Boolean))]
+      .sort((a,b) => a.localeCompare(b));
+
+    // Helpers de filtrado (equipo / mis equipos / jugador)
+    const playerQ = catRankPlayerQ.toLowerCase().trim();
+    const passTeam = (name) => {
+      if (catRankMis && !isMiEquipo(name)) return false;
+      if (catRankTeam && name !== catRankTeam) return false;
+      return true;
+    };
+    const passPlayer = (name) => !playerQ || (name || '').toLowerCase().includes(playerQ);
+
+    const minutesRaw = DB.playerStats.filter(r => r.competition_key === k);
+    const minutesByPlayer = {};
+    minutesRaw.forEach(r => {
+      const id = r.player_id;
+      if (!minutesByPlayer[id]) minutesByPlayer[id] = { player_name: r.player_name || id, team_name: r.team_name, crest_url: r.crest_url, minutes: 0, games: 0, goals: 0 };
+      minutesByPlayer[id].minutes += +r.minutes_played || 0;
+      minutesByPlayer[id].games   += +r.games_played   || 0;
+      minutesByPlayer[id].goals   += +r.goals           || 0;
+      if (r.team_name) { minutesByPlayer[id].team_name = r.team_name; minutesByPlayer[id].crest_url = r.crest_url; }
+    });
+    const topMinutes = Object.values(minutesByPlayer)
+      .filter(p => passTeam(p.team_name) && passPlayer(p.player_name))
+      .sort((a,b) => b.minutes - a.minutes).slice(0, 25);
+    const topScorers = scorers
+      .filter(s => passTeam(s.team_name) && passPlayer(s.player_name)).slice(0, 25);
+
+    const cardsRaw = DB.cards.filter(c => c.competition_key === k);
+    const cardsByPlayer = {};
+    cardsRaw.forEach(c => {
+      const id = c.player_id; if (!id) return;
+      if (!cardsByPlayer[id]) cardsByPlayer[id] = { player_name: DB.players[id]?.player_name || id, team_name: c.team_name, crest_url: c.crest_url, yellow: 0, red: 0 };
+      if (c.card_type === 'Y' || c.card_type === 'YY') cardsByPlayer[id].yellow++;
+      if (c.card_type === 'R' || c.card_type === 'YR') cardsByPlayer[id].red++;
+    });
+    const topCards = Object.values(cardsByPlayer)
+      .filter(p => passTeam(p.team_name) && passPlayer(p.player_name))
+      .sort((a,b) => (b.yellow+b.red*2)-(a.yellow+a.red*2)).slice(0,25);
+
+    const esc = (s) => String(s).replace(/"/g, '&quot;');
+    const empty = (cols) => `<tr><td colspan="${cols}" style="text-align:center;color:#6B7280;padding:18px">Sin datos</td></tr>`;
+
+    const filterBar = `
+      <div class="filter-bar" style="margin-bottom:16px">
+        <div class="filter-group">
+          <label>Equipo</label>
+          <select id="cat-rank-team" onchange="catRankTeam=this.value;renderCategorias()">
+            <option value="">Todos los equipos</option>
+            ${teamNames.map(n => `<option value="${esc(n)}" ${n===catRankTeam?'selected':''}>${n}</option>`).join('')}
+          </select>
+        </div>
+        <div class="filter-group">
+          <label>Jugador</label>
+          <input type="text" id="cat-rank-player" placeholder="Buscar jugador..." value="${esc(catRankPlayerQ)}"
+            oninput="catRankPlayerQ=this.value;catRankFocus=true;renderCategorias()">
+        </div>
+        <button class="btn" onclick="catRankMis=!catRankMis;renderCategorias()"
+          style="background:${catRankMis?'#F59E0B':'#c8102e'};border-color:${catRankMis?'#F59E0B':'#c8102e'};${catRankMis?'color:#111':''}">
+          ${catRankMis ? '★ MIS EQUIPOS' : 'MIS EQUIPOS'}
+        </button>
+        <button class="btn secondary" onclick="catRankTeam='';catRankPlayerQ='';catRankMis=false;renderCategorias()">Limpiar</button>
+      </div>`;
+
+    el.innerHTML = summaryHtml + filterBar + `
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:20px">
+        <div class="section-card">
+          <div class="section-card-header">⚽ Máximos goleadores</div>
+          <table><thead><tr><th>#</th><th>Jugador</th><th>Equipo</th><th class="num">Goles</th><th class="num">Pen.</th></tr></thead>
+          <tbody>${topScorers.length ? topScorers.map((s,i) => `<tr class="${isRomo(s.team_name)?'romo-row':''}">
+            <td><span class="rank-num ${i<3?'rank-'+(i+1):''}">${i+1}</span></td>
+            <td>${s.player_name}${isRomo(s.team_name)?'<span style="margin-left:5px;font-size:10px;background:#F59E0B;color:#111;padding:1px 5px;border-radius:3px;font-weight:700">ROMO</span>':''}</td>
+            <td><div class="team-with-crest"><img src="${s.crest_url||''}" onerror="this.style.display='none'" style="width:18px;height:18px;object-fit:contain"><span>${s.team_name}</span></div></td>
+            <td class="num bold">${s.goals}</td><td class="num">${s.penalties||0}</td>
+          </tr>`).join('') : empty(5)}</tbody></table>
+        </div>
+        <div class="section-card">
+          <div class="section-card-header">⏱️ Ranking minutos jugados</div>
+          <table><thead><tr><th>#</th><th>Jugador</th><th>Equipo</th><th class="num">Min.</th><th class="num">PJ</th></tr></thead>
+          <tbody>${topMinutes.length ? topMinutes.map((p,i) => `<tr class="${isRomo(p.team_name)?'romo-row':''}">
+            <td><span class="rank-num ${i<3?'rank-'+(i+1):''}">${i+1}</span></td>
+            <td>${p.player_name}${isRomo(p.team_name)?'<span style="margin-left:5px;font-size:10px;background:#F59E0B;color:#111;padding:1px 5px;border-radius:3px;font-weight:700">ROMO</span>':''}</td>
+            <td><div class="team-with-crest"><img src="${p.crest_url||''}" onerror="this.style.display='none'" style="width:18px;height:18px;object-fit:contain"><span>${p.team_name||''}</span></div></td>
+            <td class="num bold">${p.minutes.toLocaleString('es-ES')}</td><td class="num">${p.games}</td>
+          </tr>`).join('') : empty(5)}</tbody></table>
+        </div>
+        <div class="section-card">
+          <div class="section-card-header">🟨 Ranking tarjetas</div>
+          <table><thead><tr><th>#</th><th>Jugador</th><th>Equipo</th><th class="num">🟨</th><th class="num">🟥</th></tr></thead>
+          <tbody>${topCards.length ? topCards.map((p,i) => `<tr class="${isRomo(p.team_name)?'romo-row':''}">
+            <td><span class="rank-num ${i<3?'rank-'+(i+1):''}">${i+1}</span></td>
+            <td>${p.player_name}${isRomo(p.team_name)?'<span style="margin-left:5px;font-size:10px;background:#F59E0B;color:#111;padding:1px 5px;border-radius:3px;font-weight:700">ROMO</span>':''}</td>
+            <td><div class="team-with-crest"><img src="${p.crest_url||''}" onerror="this.style.display='none'" style="width:18px;height:18px;object-fit:contain"><span>${p.team_name||''}</span></div></td>
+            <td class="num bold">${p.yellow}</td><td class="num bold" style="color:#D2001C">${p.red}</td>
+          </tr>`).join('') : empty(5)}</tbody></table>
+        </div>
+      </div>`;
+
+    // Restaurar el foco en el buscador de jugador tras el re-render
+    if (catRankFocus) {
+      const pi = document.getElementById('cat-rank-player');
+      if (pi) { pi.focus(); pi.setSelectionRange(pi.value.length, pi.value.length); }
+      catRankFocus = false;
+    }
+    return;
+  }
+
+  if (catSubTab === 'equipos') {
+    const teamData = {};
+    standings.forEach(t => {
+      teamData[t.team_name] = { ...t, goals_scored_h: 0, goals_scored_a: 0, goals_conceded_h: 0, goals_conceded_a: 0, wins_h: 0, wins_a: 0 };
+    });
+    results.forEach(m => {
+      const hs = +m.home_score, as = +m.away_score;
+      if (teamData[m.home_team_name]) {
+        teamData[m.home_team_name].goals_scored_h   += hs;
+        teamData[m.home_team_name].goals_conceded_h += as;
+        if (hs > as) teamData[m.home_team_name].wins_h++;
+      }
+      if (teamData[m.away_team_name]) {
+        teamData[m.away_team_name].goals_scored_a   += as;
+        teamData[m.away_team_name].goals_conceded_a += hs;
+        if (as > hs) teamData[m.away_team_name].wins_a++;
+      }
+    });
+    const teams = Object.values(teamData).sort((a,b) => +a.rank - +b.rank);
+
+    el.innerHTML = summaryHtml + `
+      <div class="section-card">
+        <div class="section-card-header">🛡️ Datos por equipo — ${comp.name}</div>
+        <table>
+          <thead><tr>
+            <th>#</th><th>Equipo</th>
+            <th class="num">Pts</th><th class="num">PJ</th>
+            <th class="num" title="Goles marcados en casa">GF casa</th>
+            <th class="num" title="Goles marcados fuera">GF fuera</th>
+            <th class="num" title="Goles encajados en casa">GC casa</th>
+            <th class="num" title="Goles encajados fuera">GC fuera</th>
+            <th class="num">V casa</th><th class="num">V fuera</th>
+            <th class="num">DG</th>
+          </tr></thead>
+          <tbody>${teams.map(t => `<tr class="${isRomo(t.team_name)?'romo-row':''}">
+            <td><span class="rank-num ${t.rank<=3?'rank-'+t.rank:''}">${t.rank}</span></td>
+            <td><div class="team-with-crest"><img src="${t.crest_url||''}" onerror="this.style.display='none'" style="width:20px;height:20px;object-fit:contain"><span>${t.team_name}${isRomo(t.team_name)?'<span style="margin-left:6px;font-size:10px;background:#F59E0B;color:#111;padding:1px 6px;border-radius:4px;font-weight:700">ROMO</span>':''}</span></div></td>
+            <td class="num bold">${t.points}</td><td class="num">${t.played}</td>
+            <td class="num">${t.goals_scored_h}</td><td class="num">${t.goals_scored_a}</td>
+            <td class="num">${t.goals_conceded_h}</td><td class="num">${t.goals_conceded_a}</td>
+            <td class="num">${t.wins_h}</td><td class="num">${t.wins_a}</td>
+            <td class="num">${t.goal_diff > 0 ? '+'+t.goal_diff : t.goal_diff}</td>
+          </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>
+      <div style="display:flex;align-items:center;gap:12px;margin:16px 0 8px 0;flex-wrap:wrap">
+        <span style="font-size:13px;font-weight:600;color:var(--gray-700)">Mostrar en gráficas:</span>
+        <select id="cat-eq-topn" onchange="catEqTopN=+this.value;renderCategorias()" style="padding:6px 10px;border:1px solid var(--gray-300);border-radius:6px;font-size:13px;background:white">
+          <option value="5" ${catEqTopN===5?'selected':''}>Top 5</option>
+          <option value="8" ${catEqTopN===8?'selected':''}>Top 8</option>
+          <option value="10" ${catEqTopN===10?'selected':''}>Top 10</option>
+          <option value="0" ${catEqTopN===0?'selected':''}>Todos</option>
+        </select>
+        <span id="cat-eq-topn-label" style="font-size:12px;color:var(--gray-500)"></span>
+      </div>
+      <div class="charts-grid" id="cat-eq-charts">
+        <div class="chart-card"><h3>Puntos por equipo</h3><p>Clasificación general — Romo en amarillo</p><canvas id="cat-eq-points"></canvas></div>
+        <div class="chart-card"><h3>Victorias / Empates / Derrotas</h3><p>Resultados acumulados por equipo</p><canvas id="cat-eq-wdl"></canvas></div>
+        <div class="chart-card"><h3>Goles a favor y en contra</h3><p>GF vs GC por equipo</p><canvas id="cat-eq-goals"></canvas></div>
+        <div class="chart-card"><h3>Top goleadores</h3><p>Goles por jugador (excl. p.p.) — Romo en amarillo</p><canvas id="cat-eq-scorers"></canvas></div>
+        <div class="chart-card"><h3>Victorias en casa vs fuera</h3><p>Reparto local / visitante</p><canvas id="cat-eq-homeaway"></canvas></div>
+        <div class="chart-card"><h3>Diferencia de goles</h3><p>DG por equipo — positivo / negativo</p><canvas id="cat-eq-diff"></canvas></div>
+      </div>`;
+
+    // Leer filtro top-N (0 = todos)
+    const eqTopN = catEqTopN;
+    const eqTeams = eqTopN > 0 ? teams.slice(0, eqTopN) : teams;
+    const eqLabels = eqTeams.map(t => t.team_name);
+    const eqLabelEl = document.getElementById('cat-eq-topn-label');
+    if (eqLabelEl) eqLabelEl.textContent = eqTopN > 0 ? `Mostrando ${eqTeams.length} de ${teams.length} equipos` : `${teams.length} equipos`;
+
+    // Puntos por equipo (ordenado por puntos desc., respetando el filtro)
+    const ptsSorted = [...eqTeams].sort((a,b) => +b.points - +a.points);
+    catCharts['eq-points'] = new Chart(document.getElementById('cat-eq-points'), {
+      type: 'bar',
+      data: { labels: ptsSorted.map(t=>t.team_name), datasets:[{ label:'Puntos', data: ptsSorted.map(t=>+t.points), backgroundColor: ptsSorted.map(t=>isRomo(t.team_name)?'#F59E0B':'#D2001C'), borderRadius:4 }] },
+      options: { indexAxis:'y', plugins:{legend:{display:false}}, scales:{x:{beginAtZero:true}} }
+    });
+
+    // Victorias / Empates / Derrotas (apilado)
+    catCharts['eq-wdl'] = new Chart(document.getElementById('cat-eq-wdl'), {
+      type: 'bar',
+      data: { labels: eqLabels, datasets:[
+        { label:'Ganados',   data: eqTeams.map(t=>+t.won),   backgroundColor:'#16A34A' },
+        { label:'Empatados', data: eqTeams.map(t=>+t.drawn), backgroundColor:'#9CA3AF' },
+        { label:'Perdidos',  data: eqTeams.map(t=>+t.lost),  backgroundColor:'#DC2626' },
+      ]},
+      options: { plugins:{legend:{position:'bottom'}}, scales:{x:{stacked:true, ticks:{autoSkip:false, maxRotation:90, minRotation:60, font:{size:9}}}, y:{stacked:true, beginAtZero:true}} }
+    });
+
+    // Goles a favor vs en contra
+    catCharts['eq-goals'] = new Chart(document.getElementById('cat-eq-goals'), {
+      type: 'bar',
+      data: { labels: eqLabels, datasets:[
+        { label:'GF', data: eqTeams.map(t=>+t.goals_for),     backgroundColor:'#D2001C', borderRadius:3 },
+        { label:'GC', data: eqTeams.map(t=>+t.goals_against), backgroundColor:'#9CA3AF', borderRadius:3 },
+      ]},
+      options: { plugins:{legend:{position:'bottom'}}, scales:{x:{ticks:{autoSkip:false, maxRotation:90, minRotation:60, font:{size:9}}}, y:{beginAtZero:true}} }
+    });
+
+    // Top goleadores de la competición (fijo top 15, independiente del filtro de equipos)
+    const eqTopScorers = scorers.slice(0, 15);
+    catCharts['eq-scorers'] = new Chart(document.getElementById('cat-eq-scorers'), {
+      type: 'bar',
+      data: { labels: eqTopScorers.map(s=>s.player_name.split(',')[0]), datasets:[{ label:'Goles', data: eqTopScorers.map(s=>+s.goals), backgroundColor: eqTopScorers.map(s=>isRomo(s.team_name)?'#F59E0B':'#D2001C'), borderRadius:4 }] },
+      options: { indexAxis:'y', plugins:{legend:{display:false}}, scales:{x:{beginAtZero:true}} }
+    });
+
+    // Victorias en casa vs fuera (apilado)
+    catCharts['eq-homeaway'] = new Chart(document.getElementById('cat-eq-homeaway'), {
+      type: 'bar',
+      data: { labels: eqLabels, datasets:[
+        { label:'V casa',  data: eqTeams.map(t=>+t.wins_h), backgroundColor:'#D2001C' },
+        { label:'V fuera', data: eqTeams.map(t=>+t.wins_a), backgroundColor:'#374151' },
+      ]},
+      options: { plugins:{legend:{position:'bottom'}}, scales:{x:{stacked:true, ticks:{autoSkip:false, maxRotation:90, minRotation:60, font:{size:9}}}, y:{stacked:true, beginAtZero:true}} }
+    });
+
+    // Diferencia de goles (ordenado de mejor a peor, respetando el filtro)
+    const dgSorted = [...eqTeams].sort((a,b) => +b.goal_diff - +a.goal_diff);
+    catCharts['eq-diff'] = new Chart(document.getElementById('cat-eq-diff'), {
+      type: 'bar',
+      data: { labels: dgSorted.map(t=>t.team_name), datasets:[{ label:'DG', data: dgSorted.map(t=>+t.goal_diff), backgroundColor: dgSorted.map(t=> isRomo(t.team_name) ? '#F59E0B' : (+t.goal_diff >= 0 ? '#16A34A' : '#DC2626')), borderRadius:4 }] },
+      options: { indexAxis:'y', plugins:{legend:{display:false}}, scales:{x:{beginAtZero:true}} }
+    });
+    return;
+  }
+
+  if (catSubTab === 'dashboard') {
+    const minutesRaw = DB.playerStats.filter(r => r.competition_key === k);
+    const byPlayer = {};
+    minutesRaw.forEach(r => {
+      const id = r.player_id; if (!id) return;
+      if (!byPlayer[id]) byPlayer[id] = { id, player_name: r.player_name || id, team_name: r.team_name, crest_url: r.crest_url, minutes: 0, games: 0, starters: 0, goals: 0 };
+      byPlayer[id].minutes  += +r.minutes_played || 0;
+      byPlayer[id].games    += +r.games_played   || 0;
+      byPlayer[id].starters += +r.games_starter  || 0;
+      byPlayer[id].goals    += +r.goals          || 0;
+      if (r.team_name) { byPlayer[id].team_name = r.team_name; byPlayer[id].crest_url = r.crest_url; }
+    });
+
+    // Lista de equipos de la competición (para el desplegable de filtro)
+    const dashTeamNames = [...new Set(Object.values(byPlayer).map(p => p.team_name).filter(Boolean))]
+      .sort((a,b) => a.localeCompare(b));
+
+    const search = catDashPlayerSearch.toLowerCase().trim();
+    const allPlayers = Object.values(byPlayer).sort((a,b) => a.player_name.localeCompare(b.player_name));
+    const filtered = allPlayers.filter(p => {
+      if (catDashMis && !isRomo(p.team_name)) return false;
+      if (catDashTeam && p.team_name !== catDashTeam) return false;
+      if (search && !(p.player_name.toLowerCase().includes(search) || (p.team_name||'').toLowerCase().includes(search))) return false;
+      return true;
+    });
+
+    // El jugador seleccionado solo se mantiene si sigue cumpliendo los filtros activos
+    const selectedId = (catDashSelectedId && filtered.some(p => p.id === catDashSelectedId)) ? catDashSelectedId : '';
+    const selected = selectedId ? byPlayer[selectedId] : null;
+
+    let dashHtml = '';
+    if (selected) {
+      const pGoals = scorers.find(s => s.player_name === selected.player_name);
+      const pCards = DB.cards.filter(c => c.competition_key === k && c.player_id === selected.id);
+      const yellow = pCards.filter(c => c.card_type === 'Y' || c.card_type === 'YY').length;
+      const red    = pCards.filter(c => c.card_type === 'R' || c.card_type === 'YR').length;
+      const pMatches = results.filter(m => {
+        const lineup = DB.lineupsByMatch[m.match_id] || [];
+        return lineup.some(l => l.player_id === selected.id);
+      }).slice(0, 10);
+
+      dashHtml = `
+        <div style="background:${isRomo(selected.team_name)?'#FFFBEB':'white'};border:2px solid ${isRomo(selected.team_name)?'#F59E0B':'var(--gray-200)'};border-radius:8px;padding:20px;margin-bottom:20px">
+          <div style="display:flex;align-items:center;gap:16px;margin-bottom:16px">
+            <img src="${selected.crest_url||''}" onerror="this.style.display='none'" style="width:48px;height:48px;object-fit:contain">
+            <div>
+              <div style="font-size:20px;font-weight:800">${selected.player_name}${isRomo(selected.team_name)?'<span style="margin-left:8px;font-size:11px;background:#F59E0B;color:#111;padding:2px 8px;border-radius:4px;font-weight:700">ROMO</span>':''}</div>
+              <div style="color:#6B7280;font-size:14px">${selected.team_name||''} · ${comp.name}</div>
+            </div>
+          </div>
+          <div class="stats-row" style="margin-bottom:0">
+            <div class="stat-card"><div class="val">${selected.games}</div><div class="lbl">Partidos</div></div>
+            <div class="stat-card"><div class="val">${selected.starters}</div><div class="lbl">Titularidades</div></div>
+            <div class="stat-card"><div class="val">${selected.minutes.toLocaleString('es-ES')}</div><div class="lbl">Minutos</div></div>
+            <div class="stat-card"><div class="val">${pGoals?.goals || selected.goals || 0}</div><div class="lbl">Goles</div></div>
+            <div class="stat-card"><div class="val">${yellow}</div><div class="lbl">🟨</div></div>
+            <div class="stat-card"><div class="val" style="color:#D2001C">${red}</div><div class="lbl">🟥</div></div>
+          </div>
+        </div>
+        ${pMatches.length ? `<div class="section-card"><div class="section-card-header">Últimos partidos</div>
+          <div style="padding:10px">${pMatches.map(m => `
+            <div class="match-card${isRomo(m.home_team_name)||isRomo(m.away_team_name)?' romo-match':''}" onclick="openModal('${m.match_id}')" style="margin-bottom:6px">
+              <div class="match-meta"><strong>${m.match_date?new Date(m.match_date).toLocaleDateString('es-ES',{day:'2-digit',month:'short'}):''}</strong> J${m.match_week||'-'}</div>
+              <div class="team-cell"><img src="${m.home_crest_url||''}" onerror="this.style.display='none'"><span>${m.home_team_name}</span></div>
+              <div class="score-box"><span>${m.home_score??'-'}</span><span class="sep">:</span><span>${m.away_score??'-'}</span></div>
+              <div class="team-cell away"><img src="${m.away_crest_url||''}" onerror="this.style.display='none'"><span>${m.away_team_name}</span></div>
+              <div></div>
+            </div>`).join('')}
+          </div></div>` : ''}`;
+    }
+
+    const escD = (s) => String(s).replace(/"/g, '&quot;');
+    el.innerHTML = summaryHtml + `
+      <div class="section-card" style="margin-bottom:20px">
+        <div class="section-card-header">👤 Dashboard jugador — ${comp.name}</div>
+        <div class="filter-bar" style="padding:14px">
+          <div class="filter-group">
+            <label>Equipo</label>
+            <select id="cat-dash-team" onchange="catDashTeam=this.value;catDashSelectedId='';renderCategorias()">
+              <option value="">Todos los equipos</option>
+              ${dashTeamNames.map(n => `<option value="${escD(n)}" ${n===catDashTeam?'selected':''}>${n}</option>`).join('')}
+            </select>
+          </div>
+          <div class="filter-group">
+            <label>Jugador</label>
+            <input type="text" id="cat-dash-search" placeholder="Buscar jugador o equipo..." value="${escD(catDashPlayerSearch)}"
+              oninput="catDashPlayerSearch=this.value;catDashSelectedId='';catDashFocus=true;renderCategorias()">
+          </div>
+          <div class="filter-group">
+            <label>Seleccionar</label>
+            <select id="cat-dash-select" onchange="catDashSelectedId=this.value;renderCategorias()">
+              <option value="">${filtered.length ? 'Selecciona jugador...' : 'Sin resultados'}</option>
+              ${filtered.map(p => `<option value="${p.id}" ${p.id===selectedId?'selected':''}>${p.player_name}${isRomo(p.team_name)?' ⭐':''} — ${p.team_name||''}</option>`).join('')}
+            </select>
+          </div>
+          <button class="btn" onclick="catDashMis=!catDashMis;catDashSelectedId='';renderCategorias()"
+            style="background:${catDashMis?'#F59E0B':'#c8102e'};border-color:${catDashMis?'#F59E0B':'#c8102e'};${catDashMis?'color:#111':''}">
+            ${catDashMis ? '★ MIS JUGADORES' : 'MIS JUGADORES'}
+          </button>
+          <button class="btn secondary" onclick="catDashTeam='';catDashPlayerSearch='';catDashMis=false;catDashSelectedId='';renderCategorias()">Limpiar</button>
+        </div>
+      </div>
+      ${dashHtml}`;
+
+    // Restaurar el foco en el buscador de jugador tras el re-render
+    if (catDashFocus) {
+      const si = document.getElementById('cat-dash-search');
+      if (si) { si.focus(); si.setSelectionRange(si.value.length, si.value.length); }
+      catDashFocus = false;
+    }
+    return;
+  }
+
+  if (catSubTab === 'graficas') {
+    el.innerHTML = summaryHtml + `
+      <div class="charts-grid" id="cat-charts-container">
+        <div class="chart-card"><h3>Goles por jornada</h3><p>Goles marcados por jornada</p><canvas id="cat-ch-goals-0"></canvas></div>
+        <div class="chart-card"><h3>Distribución de resultados</h3><p>Victorias locales, empates y visitantes</p><canvas id="cat-ch-results-0"></canvas></div>
+        <div class="chart-card"><h3>Top goleadores</h3><p>Goles por jugador (excl. p.p.) — Romo en amarillo</p><canvas id="cat-ch-scorers-0"></canvas></div>
+        <div class="chart-card"><h3>Goles por minuto</h3><p>Distribución a lo largo del partido</p><canvas id="cat-ch-min-0"></canvas></div>
+      </div>`;
+
+    // Goals per round
+    const goalsByRound = {};
+    results.forEach(m => {
+      const w = m.match_week; if (!w) return;
+      goalsByRound[w] = (goalsByRound[w]||0) + (+m.home_score||0) + (+m.away_score||0);
+    });
+    const rounds = Object.keys(goalsByRound).map(Number).sort((a,b)=>a-b);
+    catCharts['goals-0'] = new Chart(document.getElementById('cat-ch-goals-0'), {
+      type: 'bar',
+      data: { labels: rounds.map(r=>`J${r}`), datasets: [{ label:'Goles', data: rounds.map(r=>goalsByRound[r]), backgroundColor:'#D2001C', borderRadius:4 }] },
+      options: { plugins:{ legend:{display:false} }, scales:{ y:{beginAtZero:true} } }
+    });
+
+    let wins=0, draws=0, losses=0;
+    results.forEach(m => {
+      const hs=+m.home_score, as_=+m.away_score;
+      if (isNaN(hs)||isNaN(as_)) return;
+      if (hs>as_) wins++; else if (hs===as_) draws++; else losses++;
+    });
+    catCharts['results-0'] = new Chart(document.getElementById('cat-ch-results-0'), {
+      type: 'doughnut',
+      data: { labels:['Victoria local','Empate','Victoria visitante'], datasets:[{ data:[wins,draws,losses], backgroundColor:['#D2001C','#6B7280','#374151'], borderWidth:0 }] },
+      options: { plugins:{ legend:{position:'bottom'} } }
+    });
+
+    const catScorerTeam = {};
+    DB.scorers.forEach(s => { if (s.player_name) catScorerTeam[s.player_name] = s.team_name; });
+    const scorerMap = {};
+    goals.forEach(g => {
+      if (!g.scorer_player_id || g.is_own_goal==='1') return;
+      scorerMap[g.scorer_player_id] = (scorerMap[g.scorer_player_id]||0) + 1;
+    });
+    const top = Object.entries(scorerMap).sort((a,b)=>b[1]-a[1]).slice(0,15)
+      .map(([id,n]) => { const name = DB.players[id]?.player_name || id; return { name, goals: n, team: catScorerTeam[name]||'' }; });
+    catCharts['scorers-0'] = new Chart(document.getElementById('cat-ch-scorers-0'), {
+      type: 'bar',
+      data: { labels: top.map(s=>s.name.split(',')[0]), datasets:[{ label:'Goles', data:top.map(s=>s.goals), backgroundColor:top.map(s=>isRomo(s.team)?'#F59E0B':'#D2001C'), borderRadius:4 }] },
+      options: { indexAxis:'y', plugins:{legend:{display:false}}, scales:{x:{beginAtZero:true}} }
+    });
+
+    const buckets = {'1-15':0,'16-30':0,'31-45':0,'46-60':0,'61-75':0,'76-90':0,'90+':0};
+    goals.forEach(g => {
+      const min=+g.minute; if (isNaN(min)) return;
+      if (min<=15) buckets['1-15']++;
+      else if (min<=30) buckets['16-30']++;
+      else if (min<=45) buckets['31-45']++;
+      else if (min<=60) buckets['46-60']++;
+      else if (min<=75) buckets['61-75']++;
+      else if (min<=90) buckets['76-90']++;
+      else buckets['90+']++;
+    });
+    catCharts['min-0'] = new Chart(document.getElementById('cat-ch-min-0'), {
+      type: 'bar',
+      data: { labels:Object.keys(buckets), datasets:[{ label:'Goles', data:Object.values(buckets), backgroundColor:'#D2001C', borderRadius:4 }] },
+      options: { plugins:{legend:{display:false}}, scales:{y:{beginAtZero:true}} }
+    });
+  }
+}
+
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModalDirect(); });
+
+// ── Searchable selects ──
+const ssInstances = {};
+
+function makeSearchable(id) {
+  const sel = document.getElementById(id);
+  if (!sel) return;
+
+  const wrapper = document.createElement('div');
+  wrapper.className = 'ss-wrapper';
+  sel.parentNode.insertBefore(wrapper, sel);
+  wrapper.appendChild(sel);
+  sel.style.display = 'none';
+
+  const inputWrap = document.createElement('div');
+  inputWrap.className = 'ss-input-wrap';
+
+  const icon = document.createElement('span');
+  icon.className = 'ss-icon';
+  icon.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>`;
+
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.className = 'ss-input';
+  input.autocomplete = 'off';
+
+  const dropdown = document.createElement('div');
+  dropdown.className = 'ss-dropdown';
+
+  inputWrap.appendChild(icon);
+  inputWrap.appendChild(input);
+  wrapper.appendChild(inputWrap);
+  wrapper.appendChild(dropdown);
+
+  function sync() {
+    const opt = sel.options[sel.selectedIndex];
+    input.value = (opt && opt.value) ? opt.text : '';
+    input.placeholder = sel.options[0]?.text || 'Buscar...';
+  }
+
+  function buildDropdown(query) {
+    const q = (query || '').toLowerCase();
+    dropdown.innerHTML = '';
+    Array.from(sel.options).forEach(opt => {
+      if (q && !opt.text.toLowerCase().includes(q)) return;
+      const div = document.createElement('div');
+      div.className = 'ss-option' + (opt.value === sel.value ? ' selected' : '');
+      div.textContent = opt.text;
+      div.addEventListener('mousedown', e => {
+        e.preventDefault();
+        sel.value = opt.value;
+        sel.dispatchEvent(new Event('change'));
+        sync();
+        dropdown.classList.remove('open');
+      });
+      dropdown.appendChild(div);
+    });
+    if (!dropdown.children.length) {
+      const empty = document.createElement('div');
+      empty.className = 'ss-option';
+      empty.style.color = 'var(--gray-500)';
+      empty.textContent = 'Sin resultados';
+      dropdown.appendChild(empty);
+    }
+  }
+
+  input.addEventListener('focus', () => { buildDropdown(''); dropdown.classList.add('open'); });
+  input.addEventListener('input', () => { buildDropdown(input.value); dropdown.classList.add('open'); });
+  input.addEventListener('blur', () => setTimeout(() => { dropdown.classList.remove('open'); sync(); }, 150));
+
+  sync();
+  ssInstances[id] = { sync };
+}
+
+function syncAllSearchable() {
+  Object.values(ssInstances).forEach(s => s.sync());
+}
+
+// ── Jugadores ──
+function renderJugadores() {
+  const comp = document.getElementById('j-competition').value;
+  const team = document.getElementById('j-team').value;
+  const top  = +document.getElementById('j-top').value || 10;
+
+  const jEtapa = document.getElementById('j-etapa').value;
+  const jProvincia = document.getElementById('j-provincia').value;
+
+  let data = DB.playerStats || [];
+  if (comp) data = data.filter(r => r.competition_key === comp);
+  else {
+    if (jEtapa) data = data.filter(r => DB.competitions[r.competition_key]?.etapa === jEtapa);
+    if (jProvincia) data = data.filter(r => DB.competitions[r.competition_key]?.provincia === jProvincia);
+  }
+  if (team) data = data.filter(r => r.team_id == team);
+
+  const byPlayer = {};
+  data.forEach(r => {
+    const id = r.player_id;
+    if (!byPlayer[id]) byPlayer[id] = {
+      player_name: r.player_name || r.player_nickname || id,
+      team_name: r.team_name, crest_url: r.crest_url,
+      minutes: 0, goals: 0, starters: 0
+    };
+    const p = byPlayer[id];
+    p.minutes  += +r.minutes_played || 0;
+    p.goals    += +r.goals          || 0;
+    p.starters += +r.games_starter  || 0;
+    if (r.team_name) { p.team_name = r.team_name; p.crest_url = r.crest_url; }
+  });
+
+  const all = Object.values(byPlayer);
+  const rankMinutes  = [...all].sort((a,b) => b.minutes  - a.minutes ).slice(0, top);
+  const rankGoals    = [...all].sort((a,b) => b.goals    - a.goals   ).filter(p => p.goals > 0).slice(0, top);
+  const rankStarters = [...all].sort((a,b) => b.starters - a.starters).slice(0, top);
+
+  function rankTable(list, valKey, valLabel) {
+    if (!list.length) return '<div class="empty-state">Sin datos</div>';
+    return `<table>
+      <thead><tr>
+        <th class="num">#</th><th>Jugador</th><th>Equipo</th>
+        <th class="num">${valLabel}</th>
+      </tr></thead>
+      <tbody>
+        ${list.map((p, i) => `<tr>
+          <td class="num"><span class="rank-num ${i<3?'rank-'+(i+1):''}">${i+1}</span></td>
+          <td class="bold">${p.player_name}</td>
+          <td><div class="team-with-crest">
+            <img src="${p.crest_url||''}" onerror="this.style.display='none'" style="width:20px;height:20px;object-fit:contain">
+            <span>${p.team_name||''}</span>
+          </div></td>
+          <td class="num bold">${p[valKey].toLocaleString('es-ES')}</td>
+        </tr>`).join('')}
+      </tbody>
+    </table>`;
+  }
+
+  document.getElementById('jugadores-content').innerHTML = `
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(360px,1fr));gap:20px">
+      <div class="section-card">
+        <div class="section-card-header">⏱️ Ranking de minutos jugados</div>
+        ${rankTable(rankMinutes, 'minutes', 'Minutos')}
+      </div>
+      <div class="section-card">
+        <div class="section-card-header">⚽ Ranking de goles</div>
+        ${rankTable(rankGoals, 'goals', 'Goles')}
+      </div>
+      <div class="section-card">
+        <div class="section-card-header">📋 Ranking de titularidades</div>
+        ${rankTable(rankStarters, 'starters', 'Titularidades')}
+      </div>
+    </div>`;
+}
+
+init();
+</script>
+</body>
+</html>
+
+
+
+

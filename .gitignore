@@ -1,0 +1,40 @@
+# Carpeta Claude
+.claude/
+
+# Documento interno
+Propuesta_Infraestructura_Tecnologica_v2.docx
+
+# CSVs no usados por la app
+agg_goalkeepers.csv
+agg_team_player_matrix.csv
+card.csv
+chat_session.csv
+chat_turn_feedback.csv
+coachingstaff.csv
+dim_date.csv
+dim_match.csv
+fact_match_team.csv
+goal.csv
+langchain_pg_collection.csv
+langchain_pg_embedding.csv
+lineup.csv
+manager.csv
+match.csv
+match_referee.csv
+player.csv
+player_alias.csv
+player_profile.csv
+referee.csv
+schema_docs.csv
+scout_calendar_entry.csv
+scout_organization.csv
+scout_organization_invite.csv
+scout_organization_member.csv
+scout_route_plan.csv
+stadium.csv
+stadium_location.csv
+substitution.csv
+team.csv
+users.csv
+_columns.csv
+_tables.csv
