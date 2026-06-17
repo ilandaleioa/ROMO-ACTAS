@@ -2,8 +2,14 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>Actas 25-26 | Athletic Club</title>
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#111111">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Actas Romo">
+  <link rel="apple-touch-icon" href="Escudo-Romoc.png">
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <style>
@@ -546,9 +552,111 @@
 
     /* ── Responsive ── */
     @media (max-width: 768px) {
-      .match-card { grid-template-columns: 1fr; }
+      /* Header */
+      header { padding: 0 12px; height: 50px; gap: 10px; }
+      header img { height: 28px; }
+      header h1 { font-size: 15px; }
+      header .subtitle { font-size: 11px; }
+
+      /* Top nav — scrollable */
+      nav { padding: 0 8px; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+      nav::-webkit-scrollbar { display: none; }
+      nav button { padding: 12px 14px; font-size: 12px; white-space: nowrap; }
+
+      /* Sub-tabs bar — scrollable */
+      #cat-subtabs-bar { overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; padding: 0 8px !important; }
+      #cat-subtabs-bar::-webkit-scrollbar { display: none; }
+
+      /* Pages — reduce padding + safe area */
+      .page { padding: 12px 12px calc(12px + env(safe-area-inset-bottom)); }
+      #categorias-content { padding: 12px !important; }
+
+      /* Filter bar — collapsible on mobile */
+      .filter-bar { padding: 0; flex-direction: column; gap: 0; }
+      .filter-toggle-btn {
+        display: flex !important;
+        width: 100%;
+        justify-content: space-between;
+        align-items: center;
+        padding: 12px 14px;
+        font-size: 13px;
+        font-weight: 600;
+        background: white;
+        border: none;
+        border-radius: var(--radius);
+        cursor: pointer;
+        color: var(--gray-700);
+      }
+      .filter-bar-inner {
+        display: none;
+        flex-wrap: wrap;
+        gap: 10px;
+        padding: 12px;
+        border-top: 1px solid var(--gray-200);
+      }
+      .filter-bar.open .filter-bar-inner { display: flex; }
+      .filter-bar .filter-group { min-width: calc(50% - 5px); flex: 1 1 calc(50% - 5px); }
+      .filter-bar .filter-group.wide { min-width: 100%; flex: 1 1 100%; }
+      .filter-bar .btn { align-self: stretch; }
+
+      /* Match cards — mobile layout */
+      .match-card {
+        grid-template-columns: 1fr auto 1fr;
+        grid-template-rows: auto auto;
+        gap: 4px 6px;
+        padding: 10px 12px;
+      }
+      .match-meta {
+        grid-column: 1 / 4;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 2px;
+      }
+      .match-meta strong { display: inline; font-size: 12px; }
+      .match-comp {
+        grid-column: 1 / 4;
+        text-align: left;
+        margin-top: 2px;
+        max-width: 100%;
+      }
+      .team-cell span { font-size: 12px; }
+      .team-cell img { width: 22px; height: 22px; }
+      .score-box { padding: 4px 10px; font-size: 15px; min-width: 60px; }
+
+      /* Charts */
       .charts-grid { grid-template-columns: 1fr; }
+      .chart-card canvas { max-height: 240px; }
+
+      /* Lineup */
       .lineup-grid { grid-template-columns: 1fr; }
+
+      /* Modal — full screen */
+      .modal-overlay { padding: 0; align-items: flex-end; }
+      .modal {
+        border-radius: 16px 16px 0 0;
+        max-height: 92dvh;
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+      }
+      .modal-score-box { font-size: 32px; }
+      .modal-team img { width: 40px; height: 40px; }
+
+      /* Stats row */
+      .stats-row { grid-template-columns: repeat(3, 1fr); gap: 8px; }
+      .stat-card { padding: 10px 8px; }
+      .stat-card .val { font-size: 22px; }
+
+      /* Tables — horizontal scroll */
+      .section-card { overflow-x: auto; }
+      table { min-width: 480px; }
+
+      /* Pagination */
+      .pagination { flex-wrap: wrap; gap: 4px; }
+      .pagination button { padding: 6px 10px; font-size: 12px; }
+
+      /* Jugadores grid */
+      #jugadores-content > div { grid-template-columns: 1fr !important; }
     }
 
     .empty-state {
@@ -840,6 +948,7 @@ async function init() {
 
     document.getElementById('loading').style.display = 'none';
     setupFilters();
+    setupFilterToggles();
     showPage('categorias');
     renderCategorias();
 
@@ -900,10 +1009,16 @@ function setupFilters() {
   rComp.addEventListener('change', renderResumenes);
   rComp.value = '22619989-21-22619990';
 
+  // Set ROMO F.C. as default in f-team and g-team (already populated above)
+  ['f-team','g-team'].forEach(id => {
+    const sel = document.getElementById(id);
+    const romoOpt = [...sel.options].find(o => o.textContent.toLowerCase().includes('romo'));
+    if (romoOpt) sel.value = romoOpt.value;
+  });
+
   // Initial render
   currentPage = 1;
-  filteredMatches = DB.results;
-  renderMatches();
+  applyFilters();
   renderGraficas();
 
   // Jugadores filters
@@ -933,6 +1048,10 @@ function setupFilters() {
 
   // Activate searchable dropdowns after options are populated
   ['f-etapa','f-provincia','f-competition','f-team','f-week','r-etapa','r-provincia','r-competition','g-etapa','g-provincia','g-competition','g-team','j-etapa','j-provincia','j-competition','j-team'].forEach(makeSearchable);
+
+  // Set ROMO F.C. as default in j-team (populated just above)
+  const jTeamRomo = [...jTeamSel.options].find(o => o.textContent.toLowerCase().includes('romo'));
+  if (jTeamRomo) jTeamSel.value = jTeamRomo.value;
 
   // Auto-filter on change (no need to click Filtrar)
   ['f-etapa','f-provincia','f-competition','f-team','f-week'].forEach(id => {
@@ -1579,13 +1698,13 @@ let catActasPage = 1;
 const CAT_ACTAS_PAGE_SIZE = 20;
 let catDashPlayerSearch = '';   // texto de búsqueda de jugador en el dashboard
 let catEqTopN = 0;              // 0 = todos los equipos en gráficas de datos equipos
-let catDashTeam = '';           // equipo seleccionado en el dashboard
+let catDashTeam = 'ROMO F.C.';  // equipo seleccionado en el dashboard
 let catDashMis = false;         // botón "MIS JUGADORES" (solo Romo)
 let catDashSelectedId = '';     // jugador seleccionado en el dashboard
 let catDashFocus = false;       // restaurar foco en el buscador tras re-render
 
 // ── Filtros del subtab "Ranking jugadores" ──
-let catRankTeam = '';      // equipo seleccionado (team_name)
+let catRankTeam = 'ROMO F.C.'; // equipo seleccionado (team_name)
 let catRankPlayerQ = '';   // texto de búsqueda de jugador
 let catRankMis = false;    // botón "Mis equipos" (solo Romo)
 let catRankFocus = false;  // restaurar foco en el input tras re-render
@@ -2300,6 +2419,35 @@ function renderJugadores() {
 }
 
 init();
+
+// ── PWA: Service Worker ──
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('./sw.js').catch(() => {});
+}
+
+// ── Mobile: collapsible filter bars ──
+function setupFilterToggles() {
+  if (window.innerWidth > 768) return;
+  document.querySelectorAll('.filter-bar').forEach(bar => {
+    if (bar.querySelector('.filter-toggle-btn')) return;
+
+    // Wrap existing children in .filter-bar-inner
+    const inner = document.createElement('div');
+    inner.className = 'filter-bar-inner';
+    while (bar.firstChild) inner.appendChild(bar.firstChild);
+    bar.appendChild(inner);
+
+    const btn = document.createElement('button');
+    btn.className = 'filter-toggle-btn';
+    btn.innerHTML = '<span>⚙️ Filtros</span><span class="filter-toggle-arrow">▼</span>';
+    btn.addEventListener('click', () => {
+      bar.classList.toggle('open');
+      btn.querySelector('.filter-toggle-arrow').textContent = bar.classList.contains('open') ? '▲' : '▼';
+    });
+    bar.insertBefore(btn, inner);
+  });
+}
+
 </script>
 </body>
 </html>
