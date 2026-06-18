@@ -136,7 +136,8 @@
       transition: border-color .15s;
     }
     .filter-group select:focus, .filter-group input:focus { border-color: var(--red); }
-    .filter-group.wide { min-width: 280px; }
+    .filter-group.wide { min-width: 320px; }
+    .filter-group.x-wide { min-width: 400px; }
 
     /* ── Searchable Select ── */
     .ss-wrapper { position: relative; width: 100%; }
@@ -149,7 +150,7 @@
       width: 100%;
       border: 1px solid var(--gray-300);
       border-radius: 6px;
-      padding: 7px 10px 7px 30px;
+      padding: 7px 10px 7px 36px;
       font-size: 13px;
       color: var(--gray-900);
       background: white;
@@ -719,7 +720,19 @@
 
       /* Jugadores grid */
       #jugadores-content > div { grid-template-columns: 1fr !important; }
+
+      /* x-wide filter groups full width */
+      .filter-bar .filter-group.x-wide { min-width: 100% !important; flex: 1 1 100%; }
+
+      /* Ranking 3-col grid → 1 col */
+      .cat-ranking-grid { grid-template-columns: 1fr !important; }
+
+      /* Comparativa VS header → stack on very small screens */
+      .compare-header { flex-direction: column; gap: 8px; text-align: center; }
     }
+
+    /* Filter toggle hidden by default; only shown in mobile media query */
+    .filter-toggle-btn { display: none; }
 
     .empty-state {
       text-align: center;
@@ -1143,7 +1156,9 @@ function setupFilters() {
   ['j-etapa','j-provincia'].forEach(id => {
     document.getElementById(id).addEventListener('change', () => { filterCompSelect('j-competition'); renderJugadores(); });
   });
+  document.getElementById('j-competition').addEventListener('change', renderJugadores);
   const jTeamSel = document.getElementById('j-team');
+  jTeamSel.addEventListener('change', renderJugadores);
   DB.teamList.forEach(t => {
     const opt = document.createElement('option');
     opt.value = t.team_id; opt.textContent = t.team_name;
@@ -2067,6 +2082,12 @@ function renderCategorias() {
 
   // Stats summary bar
   const summaryHtml = `
+    <div style="display:flex;justify-content:flex-end;margin-bottom:6px">
+      <button onclick="(function(btn){var row=btn.closest('div').nextElementSibling;var hidden=row.style.display==='none';row.style.display=hidden?'':'none';btn.textContent=hidden?'Ocultar resumen':'Mostrar resumen';})(this)"
+        style="font-size:12px;padding:4px 12px;border:1px solid #ccc;border-radius:6px;background:#f5f5f5;cursor:pointer;color:#555">
+        Ocultar resumen
+      </button>
+    </div>
     <div class="stats-row" style="margin-bottom:20px">
       <div class="stat-card"><div class="val">${standings.length||'—'}</div><div class="lbl">Equipos</div></div>
       <div class="stat-card"><div class="val">${totalGames||'—'}</div><div class="lbl">Partidos</div></div>
@@ -2103,6 +2124,7 @@ function renderCategorias() {
   }
 
   if (catSubTab === 'actas') {
+    const esc = (s) => String(s).replace(/"/g, '&quot;');
     // Equipos únicos de la competición
     const teamNamesActas = [...new Set(results.flatMap(m => [m.home_team_name, m.away_team_name]).filter(Boolean))].sort((a,b) => a.localeCompare(b));
     // Inicializar con ROMO si aún no hay selección o si el equipo seleccionado no está en esta competición
@@ -2246,14 +2268,14 @@ function renderCategorias() {
 
     const filterBar = `
       <div class="filter-bar" style="margin-bottom:16px">
-        <div class="filter-group">
+        <div class="filter-group wide">
           <label>Equipo</label>
           <select id="cat-rank-team" onchange="catRankTeam=this.value;catRankPlayerQ='';renderCategorias()">
             <option value="">Todos los equipos</option>
             ${teamNames.map(n => `<option value="${esc(n)}" ${n===catRankTeam?'selected':''}>${n}</option>`).join('')}
           </select>
         </div>
-        <div class="filter-group">
+        <div class="filter-group x-wide">
           <label>Jugador</label>
           <select id="cat-rank-player" onchange="catRankPlayerQ=this.value;renderCategorias()" ${!catRankTeam?'disabled':''}>
             <option value="">${catRankTeam ? 'Todos los jugadores' : 'Selecciona un equipo...'}</option>
@@ -2265,14 +2287,14 @@ function renderCategorias() {
           ${catCompareMode ? '⚡ COMPARANDO' : '⚡ COMPARA JUGADORES'}
         </button>
         ${catCompareMode ? `
-        <div class="filter-group">
+        <div class="filter-group wide">
           <label>Equipo 2</label>
           <select id="cat-rank-team2" onchange="catRankTeam2=this.value;catRankPlayerQ2='';renderCategorias()">
             <option value="">Selecciona equipo...</option>
             ${teamNames.map(n => `<option value="${esc(n)}" ${n===catRankTeam2?'selected':''}>${n}</option>`).join('')}
           </select>
         </div>
-        <div class="filter-group">
+        <div class="filter-group x-wide">
           <label>Jugador 2</label>
           <select id="cat-rank-player2" onchange="catRankPlayerQ2=this.value;renderCategorias()" ${!catRankTeam2?'disabled':''}>
             <option value="">${catRankTeam2 ? 'Todos los jugadores' : 'Selecciona un equipo...'}</option>
@@ -2283,7 +2305,7 @@ function renderCategorias() {
       </div>`;
 
     el.innerHTML = summaryHtml + filterBar + `
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:20px">
+      <div class="cat-ranking-grid" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:20px">
         <div class="section-card">
           <div class="section-card-header">⚽ Máximos goleadores</div>
           <table><thead><tr><th>#</th><th>Jugador</th><th>Equipo</th><th class="num">Goles</th><th class="num">Pen.</th></tr></thead>
@@ -2383,6 +2405,7 @@ function renderCategorias() {
     makeSearchable('cat-rank-player');
     makeSearchable('cat-rank-team2');
     makeSearchable('cat-rank-player2');
+    setupFilterToggles();
     return;
   }
 
@@ -2807,15 +2830,15 @@ function renderCategorias() {
       <div class="section-card" style="margin-bottom:20px">
         <div class="section-card-header">👤 Dashboard jugador — ${comp.name}</div>
         <div class="filter-bar" style="padding:14px">
-          <div class="filter-group">
+          <div class="filter-group wide">
             <label>Equipo</label>
             <select id="cat-dash-team" onchange="catDashTeam=this.value;catDashSelectedId='';renderCategorias()">
               <option value="">Todos los equipos</option>
               ${dashTeamNames.map(n => `<option value="${escD(n)}" ${n===catDashTeam?'selected':''}>${n}</option>`).join('')}
             </select>
           </div>
-          <div class="filter-group">
-            <label>Seleccionar</label>
+          <div class="filter-group x-wide">
+            <label>Jugador</label>
             <select id="cat-dash-select" onchange="catDashSelectedId=this.value;renderCategorias()">
               <option value="">${filtered.length ? 'Selecciona jugador...' : 'Sin resultados'}</option>
               ${filtered.map(p => `<option value="${p.id}" ${p.id===selectedId?'selected':''}>${p.player_name}${isRomo(p.team_name)?' ⭐':''} — ${p.team_name||''}</option>`).join('')}
@@ -2828,6 +2851,7 @@ function renderCategorias() {
 
     makeSearchable('cat-dash-team');
     makeSearchable('cat-dash-select');
+    setupFilterToggles();
     if (window._dashChartData) {
       setTimeout(() => {
         const cd = window._dashChartData;
@@ -2921,6 +2945,7 @@ function renderCategorias() {
       </div>`;
 
     makeSearchable('cat-graf-team');
+    setupFilterToggles();
     // 1. Goles por jornada (GF y GC si hay equipo seleccionado)
     const goalsByRound = {}, goalsAgainstByRound = {};
     grafResults.forEach(m => {
