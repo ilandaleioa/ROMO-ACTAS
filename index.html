@@ -2649,7 +2649,11 @@ function renderCategorias() {
     });
 
     // El jugador seleccionado solo se mantiene si sigue cumpliendo los filtros activos
-    const selectedId = (catDashSelectedId && filtered.some(p => p.id === catDashSelectedId)) ? catDashSelectedId : '';
+    // Si hay equipo seleccionado y no hay jugador, auto-seleccionar el primero
+    if (!catDashSelectedId || !filtered.some(p => p.id === catDashSelectedId)) {
+      catDashSelectedId = filtered.length ? filtered[0].id : '';
+    }
+    const selectedId = catDashSelectedId;
     const selected = selectedId ? byPlayer[selectedId] : null;
 
     let dashHtml = '';
@@ -2827,25 +2831,22 @@ function renderCategorias() {
 
     const escD = (s) => String(s).replace(/"/g, '&quot;');
     el.innerHTML = summaryHtml + `
-      <div class="section-card" style="margin-bottom:20px">
-        <div class="section-card-header">👤 Dashboard jugador — ${comp.name}</div>
-        <div class="filter-bar" style="padding:14px">
-          <div class="filter-group wide">
-            <label>Equipo</label>
-            <select id="cat-dash-team" onchange="catDashTeam=this.value;catDashSelectedId='';renderCategorias()">
-              <option value="">Todos los equipos</option>
-              ${dashTeamNames.map(n => `<option value="${escD(n)}" ${n===catDashTeam?'selected':''}>${n}</option>`).join('')}
-            </select>
-          </div>
-          <div class="filter-group x-wide">
-            <label>Jugador</label>
-            <select id="cat-dash-select" onchange="catDashSelectedId=this.value;renderCategorias()">
-              <option value="">${filtered.length ? 'Selecciona jugador...' : 'Sin resultados'}</option>
-              ${filtered.map(p => `<option value="${p.id}" ${p.id===selectedId?'selected':''}>${p.player_name}${isRomo(p.team_name)?' ⭐':''} — ${p.team_name||''}</option>`).join('')}
-            </select>
-          </div>
-          <button class="btn secondary" onclick="catDashTeam='';catDashPlayerSearch='';catDashMis=false;catDashSelectedId='';renderCategorias()">Limpiar</button>
+      <div class="filter-bar" style="margin-bottom:16px">
+        <div class="filter-group wide">
+          <label>Equipo</label>
+          <select id="cat-dash-team" onchange="catDashTeam=this.value;catDashSelectedId='';renderCategorias()">
+            <option value="">Todos los equipos</option>
+            ${dashTeamNames.map(n => `<option value="${escD(n)}" ${n===catDashTeam?'selected':''}>${n}</option>`).join('')}
+          </select>
         </div>
+        <div class="filter-group x-wide">
+          <label>Jugador</label>
+          <select id="cat-dash-select" onchange="catDashSelectedId=this.value;renderCategorias()" ${!catDashTeam?'disabled':''}>
+            <option value="">${catDashTeam ? 'Todos los jugadores' : 'Selecciona un equipo...'}</option>
+            ${filtered.map(p => `<option value="${p.id}" ${p.id===selectedId?'selected':''}>${p.player_name}${isRomo(p.team_name)?' ⭐':''}</option>`).join('')}
+          </select>
+        </div>
+        <button class="btn secondary" onclick="catDashTeam='';catDashPlayerSearch='';catDashMis=false;catDashSelectedId='';renderCategorias()">Limpiar</button>
       </div>
       ${dashHtml}`;
 
@@ -3122,7 +3123,7 @@ function makeSearchable(id) {
     const q = (query || '').toLowerCase();
     dropdown.innerHTML = '';
     Array.from(sel.options).forEach(opt => {
-      if (q && !opt.text.toLowerCase().includes(q)) return;
+      if (q && opt.value && !opt.text.toLowerCase().includes(q)) return;
       const div = document.createElement('div');
       div.className = 'ss-option' + (opt.value === sel.value ? ' selected' : '');
       div.textContent = opt.text;
