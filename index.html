@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>Actas 25-26 | Athletic Club</title>
   <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="data:,">
   <meta name="theme-color" content="#111111">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -343,7 +344,7 @@
       background: white;
       border-radius: 12px;
       width: 100%;
-      max-width: 780px;
+      max-width: 1300px;
       box-shadow: 0 20px 60px rgba(0,0,0,.25);
       overflow: hidden;
     }
@@ -1948,6 +1949,7 @@ const CATEGORIAS_LABELS = ['CADETE HONOR BIZKAIA', 'LIGA VASCA JUVENIL'];
 let catSelectedIdx = 0;
 let catSubTab = 'actas';
 let catActasPage = 1;
+let catActasTeam = '';        // equipo seleccionado en el filtro de actas
 const CAT_ACTAS_PAGE_SIZE = 20;
 let catDashPlayerSearch = '';   // texto de búsqueda de jugador en el dashboard
 let catEqTopN = 0;              // 0 = todos los equipos en gráficas de datos equipos
@@ -1982,6 +1984,7 @@ let catMainTab = 'equipos-tab';
 function selectCategoria(idx) {
   catSelectedIdx = idx;
   catActasPage = 1;
+  catActasTeam = '';  // resetear para que ROMO se detecte en la nueva competición
   renderCategorias();
 }
 
@@ -2100,10 +2103,15 @@ function renderCategorias() {
   }
 
   if (catSubTab === 'actas') {
-    const q = (document.getElementById('cat-actas-search')?.value || '').toLowerCase().trim();
+    // Equipos únicos de la competición
+    const teamNamesActas = [...new Set(results.flatMap(m => [m.home_team_name, m.away_team_name]).filter(Boolean))].sort((a,b) => a.localeCompare(b));
+    // Inicializar con ROMO si aún no hay selección o si el equipo seleccionado no está en esta competición
+    if (!catActasTeam || !teamNamesActas.includes(catActasTeam)) {
+      catActasTeam = teamNamesActas.find(n => isRomo(n)) || '';
+    }
     let filtered = results;
-    if (q) filtered = filtered.filter(m =>
-      m.home_team_name.toLowerCase().includes(q) || m.away_team_name.toLowerCase().includes(q)
+    if (catActasTeam) filtered = filtered.filter(m =>
+      m.home_team_name === catActasTeam || m.away_team_name === catActasTeam
     );
     const total = filtered.length;
     const pages = Math.ceil(total / CAT_ACTAS_PAGE_SIZE);
@@ -2119,10 +2127,11 @@ function renderCategorias() {
       <div class="section-card">
         <div class="section-card-header">📋 Actas — ${comp.name}</div>
         <div style="padding:12px;border-bottom:1px solid var(--gray-200);display:flex;gap:10px;align-items:center">
-          <input type="text" id="cat-actas-search" placeholder="Buscar equipo..." value="${q}"
-            oninput="catActasPage=1;renderCategorias()"
-            style="padding:7px 12px;border:1px solid var(--gray-300);border-radius:6px;font-size:13px;width:220px">
-          ${q ? `<button class="btn secondary" onclick="document.getElementById('cat-actas-search').value='';catActasPage=1;renderCategorias()">Limpiar</button>` : ''}
+          <select id="cat-actas-team" onchange="catActasTeam=this.value;catActasPage=1;renderCategorias()"
+            style="padding:7px 12px;border:1px solid var(--gray-300);border-radius:6px;font-size:13px;width:240px">
+            <option value="">Todos los equipos</option>
+            ${teamNamesActas.map(n => `<option value="${esc(n)}" ${n===catActasTeam?'selected':''}>${n}</option>`).join('')}
+          </select>
         </div>
         ${paginationHtml}
         <div style="padding:8px 12px">
@@ -2157,6 +2166,7 @@ function renderCategorias() {
         </div>
         ${paginationHtml}
       </div>`;
+    makeSearchable('cat-actas-team');
     return;
   }
 
@@ -2369,7 +2379,10 @@ function renderCategorias() {
         </div>`;
       })()}`;
 
-
+    makeSearchable('cat-rank-team');
+    makeSearchable('cat-rank-player');
+    makeSearchable('cat-rank-team2');
+    makeSearchable('cat-rank-player2');
     return;
   }
 
@@ -2813,6 +2826,8 @@ function renderCategorias() {
       </div>
       ${dashHtml}`;
 
+    makeSearchable('cat-dash-team');
+    makeSearchable('cat-dash-select');
     if (window._dashChartData) {
       setTimeout(() => {
         const cd = window._dashChartData;
@@ -2876,6 +2891,11 @@ function renderCategorias() {
     const escG = (s) => String(s).replace(/"/g, '&quot;');
     const grafTeamNames = [...new Set(standings.map(s => s.team_name).filter(Boolean))].sort((a,b) => a.localeCompare(b));
 
+    // Inicializar con Romo si aún no hay selección o si el equipo no está en esta competición
+    if (!catGrafTeam || !grafTeamNames.includes(catGrafTeam)) {
+      catGrafTeam = grafTeamNames.find(n => isRomo(n)) || '';
+    }
+
     // Filtrar partidos por equipo si está seleccionado
     const grafResults = catGrafTeam
       ? results.filter(m => m.home_team_name === catGrafTeam || m.away_team_name === catGrafTeam)
@@ -2890,6 +2910,7 @@ function renderCategorias() {
             ${grafTeamNames.map(n => `<option value="${escG(n)}" ${n===catGrafTeam?'selected':''}>${n}</option>`).join('')}
           </select>
         </div>
+        <button class="btn" onclick="renderCategorias()" title="Buscar">&#128269;</button>
         ${catGrafTeam ? `<button class="btn secondary" onclick="catGrafTeam='';renderCategorias()">Limpiar</button>` : ''}
       </div>
       <div class="charts-grid" id="cat-charts-container">
@@ -2899,6 +2920,7 @@ function renderCategorias() {
         <div class="chart-card"><h3>Goles por minuto</h3><p>${catGrafTeam ? `Goles en partidos de ${catGrafTeam}` : 'Distribución a lo largo del partido'} · <em>click para filtrar</em></p><canvas id="cat-ch-min-0"></canvas><div class="chart-drill-table" id="drill-cat-min"></div></div>
       </div>`;
 
+    makeSearchable('cat-graf-team');
     // 1. Goles por jornada (GF y GC si hay equipo seleccionado)
     const goalsByRound = {}, goalsAgainstByRound = {};
     grafResults.forEach(m => {
