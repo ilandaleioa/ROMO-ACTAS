@@ -1,4 +1,4 @@
-const CACHE = 'actas-v1';
+const CACHE = 'actas-v6';
 const PRECACHE = [
   './',
   './index.html',
