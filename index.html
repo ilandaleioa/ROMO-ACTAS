@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="es">
 <head>
   <meta charset="UTF-8">
@@ -12,6 +12,8 @@
   <link rel="apple-touch-icon" href="Escudo-Romoc.png">
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -275,6 +277,35 @@
     .badge.D { background: #FEF3C7; color: #92400E; }
     .badge.L { background: #FEE2E2; color: #991B1B; }
 
+    /* ── Jornada group ── */
+    .jornada-group { margin-bottom: 16px; }
+    .jornada-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 14px;
+      background: var(--gray-900);
+      color: white;
+      border-radius: var(--radius) var(--radius) 0 0;
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: .3px;
+    }
+    .jornada-count {
+      font-size: 11px;
+      font-weight: 400;
+      opacity: .7;
+      margin-left: auto;
+    }
+    .jornada-group .match-card {
+      border-radius: 0;
+      border-top: none;
+      margin-bottom: 0;
+    }
+    .jornada-group .match-card:last-child {
+      border-radius: 0 0 var(--radius) var(--radius);
+    }
+
     /* ── Pagination ── */
     .pagination {
       display: flex;
@@ -509,6 +540,31 @@
     .rank-1 { color: #D97706; }
     .rank-2 { color: var(--gray-500); }
     .rank-3 { color: #B45309; }
+
+    /* ── Chart drill table ── */
+    .chart-drill-table {
+      margin-top: 12px;
+      border-top: 2px solid var(--gray-200);
+      padding-top: 12px;
+      overflow-x: auto;
+    }
+    .chart-drill-table table { font-size: 12px; min-width: 0; }
+    .drill-hdr {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--gray-700);
+      text-transform: uppercase;
+      letter-spacing: .5px;
+      margin-bottom: 8px;
+      padding: 6px 10px;
+      background: var(--gray-100);
+      border-radius: 6px;
+      cursor: pointer;
+    }
+    .drill-hdr:hover { background: var(--gray-200); }
 
     /* ── Gráficas page ── */
     .charts-grid {
@@ -782,7 +838,7 @@
 
 <!-- ── CATEGORÍAS ── -->
 <div class="page" id="page-categorias">
-  <div id="cat-subtabs-bar" style="background:white;border-bottom:2px solid var(--gray-200);padding:0 24px;display:flex;gap:0"></div>
+  <div id="cat-subtabs-bar" style="display:flex;flex-direction:column;width:100%"></div>
   <div id="categorias-content" style="padding:20px 24px"></div>
 </div>
 
@@ -835,6 +891,10 @@
     </div>
     <div class="modal-body">
       <div class="modal-info" id="m-info"></div>
+      <div class="modal-section" id="m-lineup-section">
+        <h3>👥 Alineaciones</h3>
+        <div class="lineup-grid" id="m-lineup"></div>
+      </div>
       <div class="modal-section" id="m-goals-section">
         <h3>⚽ Goles</h3>
         <div class="event-list" id="m-goals"></div>
@@ -842,10 +902,6 @@
       <div class="modal-section" id="m-cards-section">
         <h3>🟨 Tarjetas</h3>
         <div class="event-list" id="m-cards"></div>
-      </div>
-      <div class="modal-section" id="m-lineup-section">
-        <h3>👥 Alineaciones</h3>
-        <div class="lineup-grid" id="m-lineup"></div>
       </div>
     </div>
   </div>
@@ -856,6 +912,40 @@
 const DB = {};
 let charts = {};
 let catCharts = {};
+Chart.register(ChartDataLabels);
+
+// ── Drill helpers ──
+function drillHeader(title, drillId) {
+  return `<div class="drill-hdr" onclick="var e=document.getElementById('${drillId}');e.innerHTML='';e._last=null;">▼ ${title} <span style="font-size:10px;font-weight:400;color:var(--gray-500)">(click para cerrar)</span></div>`;
+}
+function matchDrillHtml(matches) {
+  if (!matches.length) return '<div class="empty-state" style="padding:16px">Sin partidos</div>';
+  return '<table><thead><tr><th>Fecha</th><th class="num">J</th><th>Local</th><th class="num">Res</th><th>Visitante</th><th>Competición</th></tr></thead><tbody>' +
+    matches.map(m => '<tr class="' + (isRomo(m.home_team_name)||isRomo(m.away_team_name)?'romo-row':'') + '" style="cursor:pointer" onclick="openModal('' + m.match_id + '')">' +
+      '<td>' + (m.match_date ? new Date(m.match_date).toLocaleDateString('es-ES',{day:'2-digit',month:'short',year:'numeric'}) : '-') + '</td>' +
+      '<td class="num">J' + (m.match_week||'-') + '</td>' +
+      '<td><div class="team-with-crest"><img src="' + (m.home_crest_url||'') + '" onerror="this.style.display='none'" style="width:16px;height:16px;object-fit:contain"><span>' + m.home_team_name + '</span></div></td>' +
+      '<td class="num bold" style="white-space:nowrap">' + (m.home_score??'-') + ' : ' + (m.away_score??'-') + '</td>' +
+      '<td><div class="team-with-crest"><img src="' + (m.away_crest_url||'') + '" onerror="this.style.display='none'" style="width:16px;height:16px;object-fit:contain"><span>' + m.away_team_name + '</span></div></td>' +
+      '<td style="font-size:11px;color:var(--gray-500)">' + (DB.competitions[m.competition_key]?.competition_name||'') + '</td>' +
+    '</tr>').join('') + '</tbody></table>';
+}
+function goalsDrillHtml(gs) {
+  if (!gs.length) return '<div class="empty-state" style="padding:16px">Sin goles</div>';
+  return '<table><thead><tr><th>Jugador</th><th>Equipo</th><th class="num">Min</th><th>Tipo</th><th>Partido</th></tr></thead><tbody>' +
+    gs.map(g => {
+      const match = DB.results.find(r => r.match_id == g.match_id);
+      const player = DB.players[g.scorer_player_id];
+      const playerName = player?.player_name || g.scorer_player_id || '-';
+      const type = g.is_own_goal==='1'?'p.p.':g.is_penalty==='1'?'pen.':'-';
+      const teamName = match ? (g.scoring_team_id == match.home_team_id ? match.home_team_name : match.away_team_name) : '';
+      return '<tr style="cursor:pointer" onclick="openModal('' + g.match_id + '')">' +
+        '<td>' + playerName + '</td><td style="font-size:11px">' + teamName + '</td>' +
+        '<td class="num">' + g.minute + "'</td><td style="font-size:11px">" + type + '</td>' +
+        '<td style="font-size:11px;color:var(--gray-500)">' + (match?match.home_team_name+' '+match.home_score+':'+match.away_score+' '+match.away_team_name:'-') + '</td>' +
+      '</tr>';
+    }).join('') + '</tbody></table>';
+}
 
 // ── CSV loader ──
 function loadCSV(name) {
@@ -1052,6 +1142,7 @@ function setupFilters() {
   // Set ROMO F.C. as default in j-team (populated just above)
   const jTeamRomo = [...jTeamSel.options].find(o => o.textContent.toLowerCase().includes('romo'));
   if (jTeamRomo) jTeamSel.value = jTeamRomo.value;
+  syncAllSearchable();
 
   // Auto-filter on change (no need to click Filtrar)
   ['f-etapa','f-provincia','f-competition','f-team','f-week'].forEach(id => {
@@ -1128,6 +1219,10 @@ function applyFilters() {
     if (from && m.match_date < from) return false;
     if (to && m.match_date > to) return false;
     return true;
+  }).sort((a, b) => {
+    const wDiff = (+a.match_week || 0) - (+b.match_week || 0);
+    if (wDiff !== 0) return wDiff;
+    return (a.match_date || '').localeCompare(b.match_date || '');
   });
   currentPage = 1;
   renderMatches();
@@ -1203,11 +1298,38 @@ function renderMatches() {
   const total = filteredMatches.length;
   document.getElementById('match-count').textContent = `${total.toLocaleString()} partidos`;
 
+  filteredMatches.sort((a, b) => {
+    const wa = parseFloat(a.match_week), wb = parseFloat(b.match_week);
+    if (!isNaN(wa) && !isNaN(wb) && wa !== wb) return wa - wb;
+    return (a.match_date || '').localeCompare(b.match_date || '');
+  });
+
   const start = (currentPage - 1) * PAGE_SIZE;
   const page = filteredMatches.slice(start, start + PAGE_SIZE);
 
+  // Group by match_week
+  const byWeek = {};
+  page.forEach(m => {
+    const w = m.match_week != null && m.match_week !== '' ? m.match_week : '—';
+    if (!byWeek[w]) byWeek[w] = [];
+    byWeek[w].push(m);
+  });
+  const weeks = Object.keys(byWeek).sort((a, b) => {
+    const na = parseFloat(a), nb = parseFloat(b);
+    if (isNaN(na) || isNaN(nb)) return String(a).localeCompare(String(b));
+    return na - nb;
+  });
+
   const list = document.getElementById('matches-list');
-  list.innerHTML = page.map(m => matchCard(m)).join('');
+  list.innerHTML = weeks.map(w => `
+    <div class="jornada-group">
+      <div class="jornada-header">
+        Jornada ${w}
+        <span class="jornada-count">${byWeek[w].length} partido${byWeek[w].length !== 1 ? 's' : ''}</span>
+      </div>
+      ${byWeek[w].map(m => matchCard(m)).join('')}
+    </div>
+  `).join('');
 
   renderPagination(total);
 }
@@ -1552,13 +1674,16 @@ function renderGraficas() {
 
   const grid = document.getElementById('charts-grid');
   grid.innerHTML = `
-    <div class="chart-card"><h3>Resultados por jornada</h3><p>Goles marcados por jornada</p><canvas id="ch-goals-round"></canvas></div>
+    <div class="chart-card"><h3>Resultados por jornada</h3><p>Goles marcados por jornada · <em>click en barra para filtrar</em></p><canvas id="ch-goals-round"></canvas><div class="chart-drill-table" id="drill-goals-round"></div></div>
     <div class="chart-card"><h3>Distribución de resultados</h3><p>Victorias locales, empates y victorias visitantes</p><canvas id="ch-results"></canvas></div>
-    <div class="chart-card"><h3>Top 15 goleadores</h3><p>${compKey ? 'En esta competición' : 'Global'}</p><canvas id="ch-scorers"></canvas></div>
+    <div class="chart-card"><h3>Top 15 goleadores</h3><p>${compKey ? 'En esta competición' : 'Global'} · <em>click en barra para filtrar</em></p><canvas id="ch-scorers"></canvas><div class="chart-drill-table" id="drill-scorers"></div></div>
     <div class="chart-card"><h3>Tarjetas por tipo</h3><p>Amarillas, rojas y dobles amarillas</p><canvas id="ch-cards"></canvas></div>
-    <div class="chart-card"><h3>Goles por minuto</h3><p>Distribución de goles a lo largo del partido</p><canvas id="ch-goals-min"></canvas></div>
-    <div class="chart-card"><h3>Top 10 equipos goleadores</h3><p>Equipos que más goles han marcado</p><canvas id="ch-teams"></canvas></div>
+    <div class="chart-card"><h3>Goles por minuto</h3><p>Distribución de goles a lo largo del partido · <em>click en barra para filtrar</em></p><canvas id="ch-goals-min"></canvas><div class="chart-drill-table" id="drill-goals-min"></div></div>
+    <div class="chart-card"><h3>Top 10 equipos goleadores</h3><p>Equipos que más goles han marcado · <em>click en barra para filtrar</em></p><canvas id="ch-teams"></canvas><div class="chart-drill-table" id="drill-teams"></div></div>
   `;
+
+  const DL_VERT = { anchor:'end', align:'end', color:'#374151', font:{weight:'700',size:11}, formatter: v => v > 0 ? v : '' };
+  const DL_HORIZ = { anchor:'end', align:'end', color:'#374151', font:{weight:'700',size:10}, clip:false, formatter: v => v > 0 ? v : '' };
 
   // 1. Goals per round
   const goalsByRound = {};
@@ -1576,7 +1701,20 @@ function renderGraficas() {
       datasets: [{ label: 'Goles', data: rounds.map(r => goalsByRound[r]),
         backgroundColor: '#D2001C', borderRadius: 4 }]
     },
-    options: { plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
+    options: {
+      onClick: (evt, elements) => {
+        if (!elements.length) return;
+        const idx = elements[0].index;
+        const jornada = rounds[idx];
+        const el = document.getElementById('drill-goals-round');
+        if (el._last === String(jornada)) { el.innerHTML = ''; el._last = null; return; }
+        el._last = String(jornada);
+        const ms = results.filter(r => r.match_week == jornada).sort((a,b)=>(a.match_date||'').localeCompare(b.match_date||''));
+        el.innerHTML = drillHeader(`Jornada ${jornada} — ${ms.length} partidos`, 'drill-goals-round') + matchDrillHtml(ms);
+      },
+      plugins: { legend:{ display:false }, datalabels: DL_VERT },
+      scales: { y: { beginAtZero: true } }
+    }
   });
 
   // 2. Results distribution
@@ -1596,7 +1734,7 @@ function renderGraficas() {
         backgroundColor: ['#D2001C', '#6B7280', '#374151'],
         borderWidth: 0 }]
     },
-    options: { plugins: { legend: { position: 'bottom' } } }
+    options: { plugins: { legend: { position: 'bottom' }, datalabels: { display: false } } }
   });
 
   // 3. Top scorers
@@ -1610,7 +1748,7 @@ function renderGraficas() {
   DB.scorers.forEach(s => { if (s.player_name) scorerTeam[s.player_name] = s.team_name; });
   const topScorers = Object.entries(scorerMap)
     .sort((a,b) => b[1]-a[1]).slice(0,15)
-    .map(([id, gls]) => { const name = DB.players[id]?.player_name || id; return { name, goals: gls, team: scorerTeam[name] || '' }; });
+    .map(([id, gls]) => { const name = DB.players[id]?.player_name || id; return { id, name, goals: gls, team: scorerTeam[name] || '' }; });
   charts.scorers = new Chart(document.getElementById('ch-scorers'), {
     type: 'bar',
     data: {
@@ -1620,7 +1758,19 @@ function renderGraficas() {
     },
     options: {
       indexAxis: 'y',
-      plugins: { legend: { display: false } },
+      clip: false,
+      layout: { padding: { right: 30 } },
+      onClick: (evt, elements) => {
+        if (!elements.length) return;
+        const idx = elements[0].index;
+        const scorer = topScorers[idx];
+        const el = document.getElementById('drill-scorers');
+        if (el._last === scorer.id) { el.innerHTML = ''; el._last = null; return; }
+        el._last = scorer.id;
+        const gs = goals.filter(g => g.scorer_player_id == scorer.id && g.is_own_goal !== '1').sort((a,b)=>+a.minute-+b.minute);
+        el.innerHTML = drillHeader(`${scorer.name.split(',')[0]} — ${gs.length} goles`, 'drill-scorers') + goalsDrillHtml(gs);
+      },
+      plugins: { legend:{ display:false }, datalabels: DL_HORIZ },
       scales: { x: { beginAtZero: true } }
     }
   });
@@ -1637,7 +1787,7 @@ function renderGraficas() {
         backgroundColor: ['#F59E0B', '#111111', '#F97316'],
         borderWidth: 0 }]
     },
-    options: { plugins: { legend: { position: 'bottom' } } }
+    options: { plugins: { legend: { position: 'bottom' }, datalabels: { display: false } } }
   });
 
   // 5. Goals by minute range
@@ -1653,14 +1803,30 @@ function renderGraficas() {
     else if (min <= 90) minuteBuckets['76-90']++;
     else minuteBuckets['90+']++;
   });
+  const minRangeKeys = Object.keys(minuteBuckets);
+  const minRangeMap = {'1-15':[0,15],'16-30':[16,30],'31-45':[31,45],'46-60':[46,60],'61-75':[61,75],'76-90':[76,90],'90+':[91,999]};
   charts.goalsMin = new Chart(document.getElementById('ch-goals-min'), {
     type: 'bar',
     data: {
-      labels: Object.keys(minuteBuckets),
+      labels: minRangeKeys,
       datasets: [{ label: 'Goles', data: Object.values(minuteBuckets),
         backgroundColor: '#D2001C', borderRadius: 4 }]
     },
-    options: { plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
+    options: {
+      onClick: (evt, elements) => {
+        if (!elements.length) return;
+        const idx = elements[0].index;
+        const rangeKey = minRangeKeys[idx];
+        const el = document.getElementById('drill-goals-min');
+        if (el._last === rangeKey) { el.innerHTML = ''; el._last = null; return; }
+        el._last = rangeKey;
+        const [lo, hi] = minRangeMap[rangeKey];
+        const gs = goals.filter(g => { const m=+g.minute; return m>=lo && m<=hi; }).sort((a,b)=>+a.minute-+b.minute);
+        el.innerHTML = drillHeader(`Minuto ${rangeKey} — ${gs.length} goles`, 'drill-goals-min') + goalsDrillHtml(gs);
+      },
+      plugins: { legend:{ display:false }, datalabels: DL_VERT },
+      scales: { y: { beginAtZero: true } }
+    }
   });
 
   // 6. Top scoring teams
@@ -1683,7 +1849,19 @@ function renderGraficas() {
     },
     options: {
       indexAxis: 'y',
-      plugins: { legend: { display: false } },
+      clip: false,
+      layout: { padding: { right: 30 } },
+      onClick: (evt, elements) => {
+        if (!elements.length) return;
+        const idx = elements[0].index;
+        const teamName = topTeams[idx][0];
+        const el = document.getElementById('drill-teams');
+        if (el._last === teamName) { el.innerHTML = ''; el._last = null; return; }
+        el._last = teamName;
+        const ms = results.filter(r => r.home_team_name === teamName || r.away_team_name === teamName).sort((a,b)=>(a.match_date||'').localeCompare(b.match_date||''));
+        el.innerHTML = drillHeader(`${teamName} — ${ms.length} partidos`, 'drill-teams') + matchDrillHtml(ms);
+      },
+      plugins: { legend:{ display:false }, datalabels: DL_HORIZ },
       scales: { x: { beginAtZero: true } }
     }
   });
@@ -1702,6 +1880,7 @@ let catDashTeam = 'ROMO F.C.';  // equipo seleccionado en el dashboard
 let catDashMis = false;         // botón "MIS JUGADORES" (solo Romo)
 let catDashSelectedId = '';     // jugador seleccionado en el dashboard
 let catDashFocus = false;       // restaurar foco en el buscador tras re-render
+let catGrafTeam = '';           // equipo seleccionado en el subtab gráficas
 
 // ── Filtros del subtab "Ranking jugadores" ──
 let catRankTeam = 'ROMO F.C.'; // equipo seleccionado (team_name)
@@ -1709,14 +1888,19 @@ let catRankPlayerQ = '';   // texto de búsqueda de jugador
 let catRankMis = false;    // botón "Mis equipos" (solo Romo)
 let catRankFocus = false;  // restaurar foco en el input tras re-render
 
-const CAT_SUBTABS = [
-  { key: 'clasificacion',    label: '📊 Clasificación' },
-  { key: 'actas',            label: '📋 Actas' },
-  { key: 'ranking',          label: '🏅 Ranking jugadores' },
-  { key: 'equipos',          label: '🛡️ Datos equipos' },
-  { key: 'dashboard',        label: '👤 Dashboard jugador' },
-  { key: 'graficas',         label: '📈 Gráficas' },
+const CAT_MAIN_TABS = [
+  { key: 'equipos-tab',   label: '🛡️ EQUIPOS' },
+  { key: 'jugadores-tab', label: '👤 JUGADORES' },
 ];
+const CAT_SUBTABS = [
+  { key: 'clasificacion', label: '📊 Clasificación',      group: 'equipos-tab' },
+  { key: 'actas',         label: '📋 Actas',              group: 'equipos-tab' },
+  { key: 'equipos',       label: '🛡️ Datos equipos',      group: 'equipos-tab' },
+  { key: 'graficas',      label: '📈 Gráficas',           group: 'equipos-tab' },
+  { key: 'ranking',       label: '🏅 Ranking jugadores',  group: 'jugadores-tab' },
+  { key: 'dashboard',     label: '👤 Dashboard jugador',  group: 'jugadores-tab' },
+];
+let catMainTab = 'equipos-tab';
 
 function selectCategoria(idx) {
   catSelectedIdx = idx;
@@ -1724,7 +1908,17 @@ function selectCategoria(idx) {
   renderCategorias();
 }
 
+function selectCatMainTab(mainKey) {
+  catMainTab = mainKey;
+  const first = CAT_SUBTABS.find(t => t.group === mainKey);
+  if (first) catSubTab = first.key;
+  catActasPage = 1;
+  renderCategorias();
+}
+
 function selectCatSubTab(key) {
+  const tab = CAT_SUBTABS.find(t => t.key === key);
+  if (tab) catMainTab = tab.group;
   catSubTab = key;
   catActasPage = 1;
   renderCategorias();
@@ -1734,16 +1928,36 @@ function renderCategorias() {
   Object.values(catCharts).forEach(c => c.destroy());
   catCharts = {};
 
-  // Sub-tab bar
+  // Two-level tab bar
   const bar = document.getElementById('cat-subtabs-bar');
   if (bar) {
-    bar.innerHTML = CAT_SUBTABS.map(t => {
-      const active = t.key === catSubTab;
-      return `<button onclick="selectCatSubTab('${t.key}')" style="
-        padding:12px 18px;font-size:13px;font-weight:600;border:none;border-bottom:3px solid ${active?'#D2001C':'transparent'};
-        background:none;color:${active?'#D2001C':'#6B7280'};cursor:pointer;white-space:nowrap;transition:all .15s;letter-spacing:.3px
-      ">${t.label}</button>`;
-    }).join('');
+    const visibleSubtabs = CAT_SUBTABS.filter(t => t.group === catMainTab);
+    bar.innerHTML = `
+      <div style="display:flex;flex-direction:column;width:100%">
+        <div style="display:flex;border-bottom:2px solid var(--gray-200);background:#F9FAFB">
+          ${CAT_MAIN_TABS.map(mt => {
+            const active = mt.key === catMainTab;
+            return `<button onclick="selectCatMainTab('${mt.key}')" style="
+              padding:12px 22px;font-size:14px;font-weight:700;border:none;
+              border-bottom:3px solid ${active?'#D2001C':'transparent'};
+              background:${active?'white':'transparent'};
+              color:${active?'#D2001C':'#6B7280'};cursor:pointer;white-space:nowrap;
+              transition:all .15s;letter-spacing:.5px;margin-bottom:-2px
+            ">${mt.label}</button>`;
+          }).join('')}
+        </div>
+        <div style="display:flex;border-bottom:1px solid var(--gray-200);background:white;padding-left:8px">
+          ${visibleSubtabs.map(t => {
+            const active = t.key === catSubTab;
+            return `<button onclick="selectCatSubTab('${t.key}')" style="
+              padding:10px 16px;font-size:13px;font-weight:${active?'600':'500'};border:none;
+              border-bottom:2px solid ${active?'#D2001C':'transparent'};
+              background:none;color:${active?'#D2001C':'#6B7280'};cursor:pointer;
+              white-space:nowrap;transition:all .15s;margin-bottom:-1px
+            ">${t.label}</button>`;
+          }).join('')}
+        </div>
+      </div>`;
   }
 
   const allComps = DB.competitionList.filter(c =>
@@ -1760,7 +1974,11 @@ function renderCategorias() {
   const k = comp.key;
   const standings = DB.standings.filter(s => s.competition_key === k).sort((a,b) => +a.rank - +b.rank);
   const scorers   = DB.scorers.filter(s => s.competition_key === k).sort((a,b) => +b.goals - +a.goals);
-  const results   = DB.results.filter(r => r.competition_key === k).sort((a,b) => b.match_date.localeCompare(a.match_date));
+  const results   = DB.results.filter(r => r.competition_key === k).sort((a,b) => {
+    const wDiff = (+a.match_week || 0) - (+b.match_week || 0);
+    if (wDiff !== 0) return wDiff;
+    return (a.match_date || '').localeCompare(b.match_date || '');
+  });
   const goals     = DB.goals.filter(g => g.competition_key === k);
   const cards     = DB.cards.filter(c => c.competition_key === k);
   const totalGames = results.length;
@@ -1831,14 +2049,34 @@ function renderCategorias() {
         </div>
         ${paginationHtml}
         <div style="padding:8px 12px">
-          ${slice.map(m => `
-            <div class="match-card${isRomo(m.home_team_name)||isRomo(m.away_team_name)?' romo-match':''}" onclick="openModal('${m.match_id}')" style="margin-bottom:6px">
-              <div class="match-meta"><strong>${m.match_date ? new Date(m.match_date).toLocaleDateString('es-ES',{day:'2-digit',month:'short'}) : ''}</strong> J${m.match_week||'-'}</div>
-              <div class="team-cell"><img src="${m.home_crest_url||''}" onerror="this.style.display='none'"><span>${m.home_team_name}${isRomo(m.home_team_name)?'<span style="margin-left:4px;font-size:10px;background:#F59E0B;color:#111;padding:1px 5px;border-radius:3px;font-weight:700">ROMO</span>':''}</span></div>
-              <div class="score-box"><span>${m.home_score??'-'}</span><span class="sep">:</span><span>${m.away_score??'-'}</span></div>
-              <div class="team-cell away"><img src="${m.away_crest_url||''}" onerror="this.style.display='none'"><span>${m.away_team_name}${isRomo(m.away_team_name)?'<span style="margin-left:4px;font-size:10px;background:#F59E0B;color:#111;padding:1px 5px;border-radius:3px;font-weight:700">ROMO</span>':''}</span></div>
-              <div></div>
-            </div>`).join('')}
+          ${(() => {
+            const byWeek = {};
+            slice.forEach(m => {
+              const w = m.match_week != null && m.match_week !== '' ? m.match_week : '—';
+              if (!byWeek[w]) byWeek[w] = [];
+              byWeek[w].push(m);
+            });
+            const weeks = Object.keys(byWeek).sort((a, b) => {
+              const na = parseFloat(a), nb = parseFloat(b);
+              if (isNaN(na) || isNaN(nb)) return String(b).localeCompare(String(a));
+              return nb - na;
+            });
+            return weeks.map(w => `
+              <div class="jornada-group">
+                <div class="jornada-header">
+                  Jornada ${w}
+                  <span class="jornada-count">${byWeek[w].length} partido${byWeek[w].length !== 1 ? 's' : ''}</span>
+                </div>
+                ${byWeek[w].map(m => `
+                  <div class="match-card${isRomo(m.home_team_name)||isRomo(m.away_team_name)?' romo-match':''}" onclick="openModal('${m.match_id}')">
+                    <div class="match-meta"><strong>${m.match_date ? new Date(m.match_date).toLocaleDateString('es-ES',{day:'2-digit',month:'short'}) : ''}</strong> J${m.match_week||'-'}</div>
+                    <div class="team-cell"><img src="${m.home_crest_url||''}" onerror="this.style.display='none'"><span>${m.home_team_name}${isRomo(m.home_team_name)?'<span style="margin-left:4px;font-size:10px;background:#F59E0B;color:#111;padding:1px 5px;border-radius:3px;font-weight:700">ROMO</span>':''}</span></div>
+                    <div class="score-box"><span>${m.home_score??'-'}</span><span class="sep">:</span><span>${m.away_score??'-'}</span></div>
+                    <div class="team-cell away"><img src="${m.away_crest_url||''}" onerror="this.style.display='none'"><span>${m.away_team_name}${isRomo(m.away_team_name)?'<span style="margin-left:4px;font-size:10px;background:#F59E0B;color:#111;padding:1px 5px;border-radius:3px;font-weight:700">ROMO</span>':''}</span></div>
+                    <div></div>
+                  </div>`).join('')}
+              </div>`).join('');
+          })()}
         </div>
         ${paginationHtml}
       </div>`;
@@ -1849,15 +2087,23 @@ function renderCategorias() {
     // Lista de equipos de la competición (para el desplegable de filtro)
     const teamNames = [...new Set(standings.map(s => s.team_name).filter(Boolean))]
       .sort((a,b) => a.localeCompare(b));
+    if (!teamNames.includes(catRankTeam)) {
+      catRankTeam = teamNames.find(n => isRomo(n)) || '';
+    }
+
+    // Lista de jugadores del equipo seleccionado (para el desplegable condicional)
+    const allPlayersInComp = DB.playerStats.filter(r => r.competition_key === k);
+    const playerNamesForTeam = catRankTeam
+      ? [...new Set(allPlayersInComp.filter(r => r.team_name === catRankTeam).map(r => r.player_name).filter(Boolean))].sort((a,b) => a.localeCompare(b))
+      : [];
 
     // Helpers de filtrado (equipo / mis equipos / jugador)
-    const playerQ = catRankPlayerQ.toLowerCase().trim();
     const passTeam = (name) => {
       if (catRankMis && !isMiEquipo(name)) return false;
       if (catRankTeam && name !== catRankTeam) return false;
       return true;
     };
-    const passPlayer = (name) => !playerQ || (name || '').toLowerCase().includes(playerQ);
+    const passPlayer = (name) => !catRankPlayerQ || name === catRankPlayerQ;
 
     const minutesRaw = DB.playerStats.filter(r => r.competition_key === k);
     const minutesByPlayer = {};
@@ -1887,6 +2133,24 @@ function renderCategorias() {
       .filter(p => passTeam(p.team_name) && passPlayer(p.player_name))
       .sort((a,b) => (b.yellow+b.red*2)-(a.yellow+a.red*2)).slice(0,25);
 
+    const matchIdsForComp = new Set(results.filter(r => r.competition_key === k).map(r => r.match_id));
+    const startersByPlayer = {};
+    matchIdsForComp.forEach(mid => {
+      (DB.lineupsByMatch[mid] || []).forEach(l => {
+        if (l.is_starter !== 'True' && l.is_starter !== '1' && l.is_starter !== true) return;
+        const id = l.player_id; if (!id) return;
+        const teamInfo = DB.teams[l.team_id] || {};
+        const tName = l.team_name || teamInfo.team_name || '';
+        const tCrest = l.crest_url || teamInfo.crest_url || '';
+        if (!startersByPlayer[id]) startersByPlayer[id] = { player_name: DB.players[id]?.player_name || l.player_name || id, team_name: tName, crest_url: tCrest, starters: 0 };
+        startersByPlayer[id].starters++;
+        if (tName) { startersByPlayer[id].team_name = tName; startersByPlayer[id].crest_url = tCrest; }
+      });
+    });
+    const topStarters = Object.values(startersByPlayer)
+      .filter(p => passTeam(p.team_name) && passPlayer(p.player_name))
+      .sort((a,b) => b.starters - a.starters).slice(0, 25);
+
     const esc = (s) => String(s).replace(/"/g, '&quot;');
     const empty = (cols) => `<tr><td colspan="${cols}" style="text-align:center;color:#6B7280;padding:18px">Sin datos</td></tr>`;
 
@@ -1894,15 +2158,17 @@ function renderCategorias() {
       <div class="filter-bar" style="margin-bottom:16px">
         <div class="filter-group">
           <label>Equipo</label>
-          <select id="cat-rank-team" onchange="catRankTeam=this.value;renderCategorias()">
+          <select id="cat-rank-team" onchange="catRankTeam=this.value;catRankPlayerQ='';renderCategorias()">
             <option value="">Todos los equipos</option>
             ${teamNames.map(n => `<option value="${esc(n)}" ${n===catRankTeam?'selected':''}>${n}</option>`).join('')}
           </select>
         </div>
         <div class="filter-group">
           <label>Jugador</label>
-          <input type="text" id="cat-rank-player" placeholder="Buscar jugador..." value="${esc(catRankPlayerQ)}"
-            oninput="catRankPlayerQ=this.value;catRankFocus=true;renderCategorias()">
+          <select id="cat-rank-player" onchange="catRankPlayerQ=this.value;renderCategorias()" ${!catRankTeam?'disabled':''}>
+            <option value="">${catRankTeam ? 'Todos los jugadores' : 'Selecciona un equipo...'}</option>
+            ${playerNamesForTeam.map(n => `<option value="${esc(n)}" ${n===catRankPlayerQ?'selected':''}>${n}</option>`).join('')}
+          </select>
         </div>
         <button class="btn" onclick="catRankMis=!catRankMis;renderCategorias()"
           style="background:${catRankMis?'#F59E0B':'#c8102e'};border-color:${catRankMis?'#F59E0B':'#c8102e'};${catRankMis?'color:#111':''}">
@@ -1934,23 +2200,18 @@ function renderCategorias() {
           </tr>`).join('') : empty(5)}</tbody></table>
         </div>
         <div class="section-card">
-          <div class="section-card-header">🟨 Ranking tarjetas</div>
-          <table><thead><tr><th>#</th><th>Jugador</th><th>Equipo</th><th class="num">🟨</th><th class="num">🟥</th></tr></thead>
-          <tbody>${topCards.length ? topCards.map((p,i) => `<tr class="${isRomo(p.team_name)?'romo-row':''}">
+          <div class="section-card-header">📋 Ranking titularidades</div>
+          <table><thead><tr><th>#</th><th>Jugador</th><th>Equipo</th><th class="num">Tit.</th></tr></thead>
+          <tbody>${topStarters.length ? topStarters.map((p,i) => `<tr class="${isRomo(p.team_name)?'romo-row':''}">
             <td><span class="rank-num ${i<3?'rank-'+(i+1):''}">${i+1}</span></td>
             <td>${p.player_name}${isRomo(p.team_name)?'<span style="margin-left:5px;font-size:10px;background:#F59E0B;color:#111;padding:1px 5px;border-radius:3px;font-weight:700">ROMO</span>':''}</td>
             <td><div class="team-with-crest"><img src="${p.crest_url||''}" onerror="this.style.display='none'" style="width:18px;height:18px;object-fit:contain"><span>${p.team_name||''}</span></div></td>
-            <td class="num bold">${p.yellow}</td><td class="num bold" style="color:#D2001C">${p.red}</td>
-          </tr>`).join('') : empty(5)}</tbody></table>
+            <td class="num bold">${p.starters}</td>
+          </tr>`).join('') : empty(4)}</tbody></table>
         </div>
       </div>`;
 
-    // Restaurar el foco en el buscador de jugador tras el re-render
-    if (catRankFocus) {
-      const pi = document.getElementById('cat-rank-player');
-      if (pi) { pi.focus(); pi.setSelectionRange(pi.value.length, pi.value.length); }
-      catRankFocus = false;
-    }
+
     return;
   }
 
@@ -2011,12 +2272,12 @@ function renderCategorias() {
         <span id="cat-eq-topn-label" style="font-size:12px;color:var(--gray-500)"></span>
       </div>
       <div class="charts-grid" id="cat-eq-charts">
-        <div class="chart-card"><h3>Puntos por equipo</h3><p>Clasificación general — Romo en amarillo</p><canvas id="cat-eq-points"></canvas></div>
-        <div class="chart-card"><h3>Victorias / Empates / Derrotas</h3><p>Resultados acumulados por equipo</p><canvas id="cat-eq-wdl"></canvas></div>
-        <div class="chart-card"><h3>Goles a favor y en contra</h3><p>GF vs GC por equipo</p><canvas id="cat-eq-goals"></canvas></div>
-        <div class="chart-card"><h3>Top goleadores</h3><p>Goles por jugador (excl. p.p.) — Romo en amarillo</p><canvas id="cat-eq-scorers"></canvas></div>
-        <div class="chart-card"><h3>Victorias en casa vs fuera</h3><p>Reparto local / visitante</p><canvas id="cat-eq-homeaway"></canvas></div>
-        <div class="chart-card"><h3>Diferencia de goles</h3><p>DG por equipo — positivo / negativo</p><canvas id="cat-eq-diff"></canvas></div>
+        <div class="chart-card"><h3>Puntos por equipo</h3><p>Clasificación general — Romo en amarillo · <em>click para filtrar</em></p><canvas id="cat-eq-points"></canvas><div class="chart-drill-table" id="drill-eq-points"></div></div>
+        <div class="chart-card"><h3>Victorias / Empates / Derrotas</h3><p>Resultados acumulados por equipo · <em>click para filtrar</em></p><canvas id="cat-eq-wdl"></canvas><div class="chart-drill-table" id="drill-eq-wdl"></div></div>
+        <div class="chart-card"><h3>Goles a favor y en contra</h3><p>GF vs GC por equipo · <em>click para filtrar</em></p><canvas id="cat-eq-goals"></canvas><div class="chart-drill-table" id="drill-eq-goals"></div></div>
+        <div class="chart-card"><h3>Top goleadores</h3><p>Goles por jugador (excl. p.p.) — Romo en amarillo · <em>click para filtrar</em></p><canvas id="cat-eq-scorers"></canvas><div class="chart-drill-table" id="drill-eq-scorers"></div></div>
+        <div class="chart-card"><h3>Victorias en casa vs fuera</h3><p>Reparto local / visitante · <em>click para filtrar</em></p><canvas id="cat-eq-homeaway"></canvas><div class="chart-drill-table" id="drill-eq-homeaway"></div></div>
+        <div class="chart-card"><h3>Diferencia de goles</h3><p>DG por equipo — positivo / negativo · <em>click para filtrar</em></p><canvas id="cat-eq-diff"></canvas><div class="chart-drill-table" id="drill-eq-diff"></div></div>
       </div>`;
 
     // Leer filtro top-N (0 = todos)
@@ -2031,7 +2292,20 @@ function renderCategorias() {
     catCharts['eq-points'] = new Chart(document.getElementById('cat-eq-points'), {
       type: 'bar',
       data: { labels: ptsSorted.map(t=>t.team_name), datasets:[{ label:'Puntos', data: ptsSorted.map(t=>+t.points), backgroundColor: ptsSorted.map(t=>isRomo(t.team_name)?'#F59E0B':'#D2001C'), borderRadius:4 }] },
-      options: { indexAxis:'y', plugins:{legend:{display:false}}, scales:{x:{beginAtZero:true}} }
+      options: {
+        indexAxis:'y', clip:false, layout:{padding:{right:30}},
+        onClick: (evt, elements) => {
+          if (!elements.length) return;
+          const teamName = ptsSorted[elements[0].index].team_name;
+          const el = document.getElementById('drill-eq-points');
+          if (el._last === teamName) { el.innerHTML=''; el._last=null; return; }
+          el._last = teamName;
+          const ms = results.filter(r=>r.home_team_name===teamName||r.away_team_name===teamName).sort((a,b)=>(a.match_date||'').localeCompare(b.match_date||''));
+          el.innerHTML = drillHeader(teamName+' — '+ms.length+' partidos','drill-eq-points') + matchDrillHtml(ms);
+        },
+        plugins:{legend:{display:false}, datalabels:{anchor:'end',align:'end',color:'#374151',font:{weight:'700',size:10},clip:false,formatter:v=>v>0?v:''}},
+        scales:{x:{beginAtZero:true}}
+      }
     });
 
     // Victorias / Empates / Derrotas (apilado)
@@ -2042,7 +2316,19 @@ function renderCategorias() {
         { label:'Empatados', data: eqTeams.map(t=>+t.drawn), backgroundColor:'#9CA3AF' },
         { label:'Perdidos',  data: eqTeams.map(t=>+t.lost),  backgroundColor:'#DC2626' },
       ]},
-      options: { plugins:{legend:{position:'bottom'}}, scales:{x:{stacked:true, ticks:{autoSkip:false, maxRotation:90, minRotation:60, font:{size:9}}}, y:{stacked:true, beginAtZero:true}} }
+      options: {
+        onClick: (evt, elements) => {
+          if (!elements.length) return;
+          const teamName = eqLabels[elements[0].index];
+          const el = document.getElementById('drill-eq-wdl');
+          if (el._last === teamName) { el.innerHTML=''; el._last=null; return; }
+          el._last = teamName;
+          const ms = results.filter(r=>r.home_team_name===teamName||r.away_team_name===teamName).sort((a,b)=>(a.match_date||'').localeCompare(b.match_date||''));
+          el.innerHTML = drillHeader(teamName+' — '+ms.length+' partidos','drill-eq-wdl') + matchDrillHtml(ms);
+        },
+        plugins:{legend:{position:'bottom'}, datalabels:{anchor:'center',align:'center',color:'white',font:{weight:'700',size:9},formatter:v=>v>0?v:''}},
+        scales:{x:{stacked:true, ticks:{autoSkip:false, maxRotation:90, minRotation:60, font:{size:9}}}, y:{stacked:true, beginAtZero:true}}
+      }
     });
 
     // Goles a favor vs en contra
@@ -2052,7 +2338,19 @@ function renderCategorias() {
         { label:'GF', data: eqTeams.map(t=>+t.goals_for),     backgroundColor:'#D2001C', borderRadius:3 },
         { label:'GC', data: eqTeams.map(t=>+t.goals_against), backgroundColor:'#9CA3AF', borderRadius:3 },
       ]},
-      options: { plugins:{legend:{position:'bottom'}}, scales:{x:{ticks:{autoSkip:false, maxRotation:90, minRotation:60, font:{size:9}}}, y:{beginAtZero:true}} }
+      options: {
+        onClick: (evt, elements) => {
+          if (!elements.length) return;
+          const teamName = eqLabels[elements[0].index];
+          const el = document.getElementById('drill-eq-goals');
+          if (el._last === teamName) { el.innerHTML=''; el._last=null; return; }
+          el._last = teamName;
+          const ms = results.filter(r=>r.home_team_name===teamName||r.away_team_name===teamName).sort((a,b)=>(a.match_date||'').localeCompare(b.match_date||''));
+          el.innerHTML = drillHeader(teamName+' — '+ms.length+' partidos','drill-eq-goals') + matchDrillHtml(ms);
+        },
+        plugins:{legend:{position:'bottom'}, datalabels:{anchor:'end',align:'end',color:'#374151',font:{weight:'700',size:9},formatter:v=>v>0?v:''}},
+        scales:{x:{ticks:{autoSkip:false, maxRotation:90, minRotation:60, font:{size:9}}}, y:{beginAtZero:true}}
+      }
     });
 
     // Top goleadores de la competición (fijo top 15, independiente del filtro de equipos)
@@ -2060,7 +2358,21 @@ function renderCategorias() {
     catCharts['eq-scorers'] = new Chart(document.getElementById('cat-eq-scorers'), {
       type: 'bar',
       data: { labels: eqTopScorers.map(s=>s.player_name.split(',')[0]), datasets:[{ label:'Goles', data: eqTopScorers.map(s=>+s.goals), backgroundColor: eqTopScorers.map(s=>isRomo(s.team_name)?'#F59E0B':'#D2001C'), borderRadius:4 }] },
-      options: { indexAxis:'y', plugins:{legend:{display:false}}, scales:{x:{beginAtZero:true}} }
+      options: {
+        indexAxis:'y', clip:false, layout:{padding:{right:30}},
+        onClick: (evt, elements) => {
+          if (!elements.length) return;
+          const scorer = eqTopScorers[elements[0].index];
+          const el = document.getElementById('drill-eq-scorers');
+          if (el._last === scorer.player_name) { el.innerHTML=''; el._last=null; return; }
+          el._last = scorer.player_name;
+          const scorerId = Object.entries(DB.players).find(([id,p])=>p.player_name===scorer.player_name)?.[0];
+          const gs = scorerId ? goals.filter(g=>g.scorer_player_id==scorerId&&g.is_own_goal!=='1').sort((a,b)=>+a.minute-+b.minute) : [];
+          el.innerHTML = drillHeader(scorer.player_name.split(',')[0]+' — '+gs.length+' goles','drill-eq-scorers') + goalsDrillHtml(gs);
+        },
+        plugins:{legend:{display:false}, datalabels:{anchor:'end',align:'end',color:'#374151',font:{weight:'700',size:10},clip:false,formatter:v=>v>0?v:''}},
+        scales:{x:{beginAtZero:true}}
+      }
     });
 
     // Victorias en casa vs fuera (apilado)
@@ -2070,7 +2382,19 @@ function renderCategorias() {
         { label:'V casa',  data: eqTeams.map(t=>+t.wins_h), backgroundColor:'#D2001C' },
         { label:'V fuera', data: eqTeams.map(t=>+t.wins_a), backgroundColor:'#374151' },
       ]},
-      options: { plugins:{legend:{position:'bottom'}}, scales:{x:{stacked:true, ticks:{autoSkip:false, maxRotation:90, minRotation:60, font:{size:9}}}, y:{stacked:true, beginAtZero:true}} }
+      options: {
+        onClick: (evt, elements) => {
+          if (!elements.length) return;
+          const teamName = eqLabels[elements[0].index];
+          const el = document.getElementById('drill-eq-homeaway');
+          if (el._last === teamName) { el.innerHTML=''; el._last=null; return; }
+          el._last = teamName;
+          const ms = results.filter(r=>r.home_team_name===teamName||r.away_team_name===teamName).sort((a,b)=>(a.match_date||'').localeCompare(b.match_date||''));
+          el.innerHTML = drillHeader(teamName+' — '+ms.length+' partidos','drill-eq-homeaway') + matchDrillHtml(ms);
+        },
+        plugins:{legend:{position:'bottom'}, datalabels:{anchor:'center',align:'center',color:'white',font:{weight:'700',size:9},formatter:v=>v>0?v:''}},
+        scales:{x:{stacked:true, ticks:{autoSkip:false, maxRotation:90, minRotation:60, font:{size:9}}}, y:{stacked:true, beginAtZero:true}}
+      }
     });
 
     // Diferencia de goles (ordenado de mejor a peor, respetando el filtro)
@@ -2078,7 +2402,20 @@ function renderCategorias() {
     catCharts['eq-diff'] = new Chart(document.getElementById('cat-eq-diff'), {
       type: 'bar',
       data: { labels: dgSorted.map(t=>t.team_name), datasets:[{ label:'DG', data: dgSorted.map(t=>+t.goal_diff), backgroundColor: dgSorted.map(t=> isRomo(t.team_name) ? '#F59E0B' : (+t.goal_diff >= 0 ? '#16A34A' : '#DC2626')), borderRadius:4 }] },
-      options: { indexAxis:'y', plugins:{legend:{display:false}}, scales:{x:{beginAtZero:true}} }
+      options: {
+        indexAxis:'y', clip:false, layout:{padding:{right:35}},
+        onClick: (evt, elements) => {
+          if (!elements.length) return;
+          const teamName = dgSorted[elements[0].index].team_name;
+          const el = document.getElementById('drill-eq-diff');
+          if (el._last === teamName) { el.innerHTML=''; el._last=null; return; }
+          el._last = teamName;
+          const ms = results.filter(r=>r.home_team_name===teamName||r.away_team_name===teamName).sort((a,b)=>(a.match_date||'').localeCompare(b.match_date||''));
+          el.innerHTML = drillHeader(teamName+' — '+ms.length+' partidos','drill-eq-diff') + matchDrillHtml(ms);
+        },
+        plugins:{legend:{display:false}, datalabels:{anchor:'end',align:'end',color:'#374151',font:{weight:'700',size:10},clip:false,formatter:v=>v!==0?v:''}},
+        scales:{x:{beginAtZero:true}}
+      }
     });
     return;
   }
@@ -2099,6 +2436,9 @@ function renderCategorias() {
     // Lista de equipos de la competición (para el desplegable de filtro)
     const dashTeamNames = [...new Set(Object.values(byPlayer).map(p => p.team_name).filter(Boolean))]
       .sort((a,b) => a.localeCompare(b));
+    if (!dashTeamNames.includes(catDashTeam)) {
+      catDashTeam = dashTeamNames.find(n => isRomo(n)) || '';
+    }
 
     const search = catDashPlayerSearch.toLowerCase().trim();
     const allPlayers = Object.values(byPlayer).sort((a,b) => a.player_name.localeCompare(b.player_name));
@@ -2167,21 +2507,12 @@ function renderCategorias() {
             </select>
           </div>
           <div class="filter-group">
-            <label>Jugador</label>
-            <input type="text" id="cat-dash-search" placeholder="Buscar jugador o equipo..." value="${escD(catDashPlayerSearch)}"
-              oninput="catDashPlayerSearch=this.value;catDashSelectedId='';catDashFocus=true;renderCategorias()">
-          </div>
-          <div class="filter-group">
             <label>Seleccionar</label>
             <select id="cat-dash-select" onchange="catDashSelectedId=this.value;renderCategorias()">
               <option value="">${filtered.length ? 'Selecciona jugador...' : 'Sin resultados'}</option>
               ${filtered.map(p => `<option value="${p.id}" ${p.id===selectedId?'selected':''}>${p.player_name}${isRomo(p.team_name)?' ⭐':''} — ${p.team_name||''}</option>`).join('')}
             </select>
           </div>
-          <button class="btn" onclick="catDashMis=!catDashMis;catDashSelectedId='';renderCategorias()"
-            style="background:${catDashMis?'#F59E0B':'#c8102e'};border-color:${catDashMis?'#F59E0B':'#c8102e'};${catDashMis?'color:#111':''}">
-            ${catDashMis ? '★ MIS JUGADORES' : 'MIS JUGADORES'}
-          </button>
           <button class="btn secondary" onclick="catDashTeam='';catDashPlayerSearch='';catDashMis=false;catDashSelectedId='';renderCategorias()">Limpiar</button>
         </div>
       </div>
@@ -2197,56 +2528,132 @@ function renderCategorias() {
   }
 
   if (catSubTab === 'graficas') {
+    const escG = (s) => String(s).replace(/"/g, '&quot;');
+    const grafTeamNames = [...new Set(standings.map(s => s.team_name).filter(Boolean))].sort((a,b) => a.localeCompare(b));
+
+    // Filtrar partidos por equipo si está seleccionado
+    const grafResults = catGrafTeam
+      ? results.filter(m => m.home_team_name === catGrafTeam || m.away_team_name === catGrafTeam)
+      : results;
+
     el.innerHTML = summaryHtml + `
+      <div class="filter-bar" style="margin-bottom:16px">
+        <div class="filter-group wide">
+          <label>Equipo</label>
+          <select id="cat-graf-team" onchange="catGrafTeam=this.value;renderCategorias()">
+            <option value="">Todos los equipos</option>
+            ${grafTeamNames.map(n => `<option value="${escG(n)}" ${n===catGrafTeam?'selected':''}>${n}</option>`).join('')}
+          </select>
+        </div>
+        ${catGrafTeam ? `<button class="btn secondary" onclick="catGrafTeam='';renderCategorias()">Limpiar</button>` : ''}
+      </div>
       <div class="charts-grid" id="cat-charts-container">
-        <div class="chart-card"><h3>Goles por jornada</h3><p>Goles marcados por jornada</p><canvas id="cat-ch-goals-0"></canvas></div>
-        <div class="chart-card"><h3>Distribución de resultados</h3><p>Victorias locales, empates y visitantes</p><canvas id="cat-ch-results-0"></canvas></div>
-        <div class="chart-card"><h3>Top goleadores</h3><p>Goles por jugador (excl. p.p.) — Romo en amarillo</p><canvas id="cat-ch-scorers-0"></canvas></div>
-        <div class="chart-card"><h3>Goles por minuto</h3><p>Distribución a lo largo del partido</p><canvas id="cat-ch-min-0"></canvas></div>
+        <div class="chart-card"><h3>Goles por jornada</h3><p>${catGrafTeam ? 'Goles a favor y en contra por jornada' : 'Goles marcados por jornada'} · <em>click para filtrar</em></p><canvas id="cat-ch-goals-0"></canvas><div class="chart-drill-table" id="drill-cat-goals"></div></div>
+        <div class="chart-card"><h3>Distribución de resultados</h3><p>${catGrafTeam ? `Resultados de ${catGrafTeam}` : 'Victorias locales, empates y visitantes'}</p><canvas id="cat-ch-results-0"></canvas></div>
+        <div class="chart-card"><h3>Top goleadores</h3><p>${catGrafTeam ? `Goleadores de ${catGrafTeam}` : 'Goles por jugador (excl. p.p.) — Romo en amarillo'} · <em>click para filtrar</em></p><canvas id="cat-ch-scorers-0"></canvas><div class="chart-drill-table" id="drill-cat-scorers"></div></div>
+        <div class="chart-card"><h3>Goles por minuto</h3><p>${catGrafTeam ? `Goles en partidos de ${catGrafTeam}` : 'Distribución a lo largo del partido'} · <em>click para filtrar</em></p><canvas id="cat-ch-min-0"></canvas><div class="chart-drill-table" id="drill-cat-min"></div></div>
       </div>`;
 
-    // Goals per round
-    const goalsByRound = {};
-    results.forEach(m => {
+    // 1. Goles por jornada (GF y GC si hay equipo seleccionado)
+    const goalsByRound = {}, goalsAgainstByRound = {};
+    grafResults.forEach(m => {
       const w = m.match_week; if (!w) return;
-      goalsByRound[w] = (goalsByRound[w]||0) + (+m.home_score||0) + (+m.away_score||0);
+      if (catGrafTeam) {
+        const isHome = m.home_team_name === catGrafTeam;
+        const gf = isHome ? (+m.home_score||0) : (+m.away_score||0);
+        const gc = isHome ? (+m.away_score||0) : (+m.home_score||0);
+        goalsByRound[w] = (goalsByRound[w]||0) + gf;
+        goalsAgainstByRound[w] = (goalsAgainstByRound[w]||0) + gc;
+      } else {
+        goalsByRound[w] = (goalsByRound[w]||0) + (+m.home_score||0) + (+m.away_score||0);
+      }
     });
     const rounds = Object.keys(goalsByRound).map(Number).sort((a,b)=>a-b);
+    const goalsRoundDatasets = catGrafTeam ? [
+      { label:'Goles a favor', data: rounds.map(r=>goalsByRound[r]||0), backgroundColor:'#D2001C', borderRadius:4 },
+      { label:'Goles en contra', data: rounds.map(r=>goalsAgainstByRound[r]||0), backgroundColor:'#374151', borderRadius:4 }
+    ] : [
+      { label:'Goles', data: rounds.map(r=>goalsByRound[r]), backgroundColor:'#D2001C', borderRadius:4 }
+    ];
     catCharts['goals-0'] = new Chart(document.getElementById('cat-ch-goals-0'), {
       type: 'bar',
-      data: { labels: rounds.map(r=>`J${r}`), datasets: [{ label:'Goles', data: rounds.map(r=>goalsByRound[r]), backgroundColor:'#D2001C', borderRadius:4 }] },
-      options: { plugins:{ legend:{display:false} }, scales:{ y:{beginAtZero:true} } }
+      data: { labels: rounds.map(r=>`J${r}`), datasets: goalsRoundDatasets },
+      options: {
+        onClick: (evt, elements) => {
+          if (!elements.length) return;
+          const jornada = rounds[elements[0].index];
+          const el = document.getElementById('drill-cat-goals');
+          if (el._last === String(jornada)) { el.innerHTML=''; el._last=null; return; }
+          el._last = String(jornada);
+          const ms = grafResults.filter(r=>r.match_week==jornada).sort((a,b)=>(a.match_date||'').localeCompare(b.match_date||''));
+          el.innerHTML = drillHeader('Jornada '+jornada+' — '+ms.length+' partidos','drill-cat-goals') + matchDrillHtml(ms);
+        },
+        plugins:{ legend:{ display: !!catGrafTeam }, datalabels:{anchor:'end',align:'end',color:'#374151',font:{weight:'700',size:11},formatter:v=>v>0?v:''} },
+        scales:{ y:{beginAtZero:true} }
+      }
     });
 
+    // 2. Distribución de resultados (perspectiva del equipo si está seleccionado)
     let wins=0, draws=0, losses=0;
-    results.forEach(m => {
+    grafResults.forEach(m => {
       const hs=+m.home_score, as_=+m.away_score;
       if (isNaN(hs)||isNaN(as_)) return;
-      if (hs>as_) wins++; else if (hs===as_) draws++; else losses++;
+      if (catGrafTeam) {
+        const isHome = m.home_team_name === catGrafTeam;
+        const tf = isHome ? hs : as_, tc = isHome ? as_ : hs;
+        if (tf > tc) wins++; else if (tf === tc) draws++; else losses++;
+      } else {
+        if (hs>as_) wins++; else if (hs===as_) draws++; else losses++;
+      }
     });
     catCharts['results-0'] = new Chart(document.getElementById('cat-ch-results-0'), {
       type: 'doughnut',
-      data: { labels:['Victoria local','Empate','Victoria visitante'], datasets:[{ data:[wins,draws,losses], backgroundColor:['#D2001C','#6B7280','#374151'], borderWidth:0 }] },
-      options: { plugins:{ legend:{position:'bottom'} } }
+      data: {
+        labels: catGrafTeam ? ['Victorias','Empates','Derrotas'] : ['Victoria local','Empate','Victoria visitante'],
+        datasets:[{ data:[wins,draws,losses], backgroundColor:['#D2001C','#6B7280','#374151'], borderWidth:0 }]
+      },
+      options: { plugins:{ legend:{position:'bottom'}, datalabels:{display:false} } }
     });
 
+    // 3. Top goleadores (filtrados por equipo si está seleccionado)
     const catScorerTeam = {};
     DB.scorers.forEach(s => { if (s.player_name) catScorerTeam[s.player_name] = s.team_name; });
     const scorerMap = {};
     goals.forEach(g => {
       if (!g.scorer_player_id || g.is_own_goal==='1') return;
+      if (catGrafTeam) {
+        const playerName = DB.players[g.scorer_player_id]?.player_name;
+        if (catScorerTeam[playerName] !== catGrafTeam) return;
+      }
       scorerMap[g.scorer_player_id] = (scorerMap[g.scorer_player_id]||0) + 1;
     });
-    const top = Object.entries(scorerMap).sort((a,b)=>b[1]-a[1]).slice(0,15)
-      .map(([id,n]) => { const name = DB.players[id]?.player_name || id; return { name, goals: n, team: catScorerTeam[name]||'' }; });
+    const top = Object.entries(scorerMap).sort((a,b)=>b[1]-a[1]).slice(0, catGrafTeam ? 20 : 15)
+      .map(([id,n]) => { const name = DB.players[id]?.player_name || id; return { id, name, goals: n, team: catScorerTeam[name]||'' }; });
     catCharts['scorers-0'] = new Chart(document.getElementById('cat-ch-scorers-0'), {
       type: 'bar',
       data: { labels: top.map(s=>s.name.split(',')[0]), datasets:[{ label:'Goles', data:top.map(s=>s.goals), backgroundColor:top.map(s=>isRomo(s.team)?'#F59E0B':'#D2001C'), borderRadius:4 }] },
-      options: { indexAxis:'y', plugins:{legend:{display:false}}, scales:{x:{beginAtZero:true}} }
+      options: {
+        indexAxis:'y', clip:false, layout:{padding:{right:30}},
+        onClick: (evt, elements) => {
+          if (!elements.length) return;
+          const scorer = top[elements[0].index];
+          const el = document.getElementById('drill-cat-scorers');
+          if (el._last === scorer.id) { el.innerHTML=''; el._last=null; return; }
+          el._last = scorer.id;
+          const gs = goals.filter(g=>g.scorer_player_id==scorer.id&&g.is_own_goal!=='1').sort((a,b)=>+a.minute-+b.minute);
+          el.innerHTML = drillHeader(scorer.name.split(',')[0]+' — '+gs.length+' goles','drill-cat-scorers') + goalsDrillHtml(gs);
+        },
+        plugins:{legend:{display:false}, datalabels:{anchor:'end',align:'end',color:'#374151',font:{weight:'700',size:10},clip:false,formatter:v=>v>0?v:''}},
+        scales:{x:{beginAtZero:true}}
+      }
     });
 
+    // 4. Goles por minuto (en partidos del equipo seleccionado)
+    const matchIdsForTeam = catGrafTeam ? new Set(grafResults.map(m => m.match_id)) : null;
     const buckets = {'1-15':0,'16-30':0,'31-45':0,'46-60':0,'61-75':0,'76-90':0,'90+':0};
+    const catMinRangeMap = {'1-15':[0,15],'16-30':[16,30],'31-45':[31,45],'46-60':[46,60],'61-75':[61,75],'76-90':[76,90],'90+':[91,999]};
     goals.forEach(g => {
+      if (matchIdsForTeam && !matchIdsForTeam.has(g.match_id)) return;
       const min=+g.minute; if (isNaN(min)) return;
       if (min<=15) buckets['1-15']++;
       else if (min<=30) buckets['16-30']++;
@@ -2256,10 +2663,24 @@ function renderCategorias() {
       else if (min<=90) buckets['76-90']++;
       else buckets['90+']++;
     });
+    const catBucketKeys = Object.keys(buckets);
     catCharts['min-0'] = new Chart(document.getElementById('cat-ch-min-0'), {
       type: 'bar',
-      data: { labels:Object.keys(buckets), datasets:[{ label:'Goles', data:Object.values(buckets), backgroundColor:'#D2001C', borderRadius:4 }] },
-      options: { plugins:{legend:{display:false}}, scales:{y:{beginAtZero:true}} }
+      data: { labels:catBucketKeys, datasets:[{ label:'Goles', data:Object.values(buckets), backgroundColor:'#D2001C', borderRadius:4 }] },
+      options: {
+        onClick: (evt, elements) => {
+          if (!elements.length) return;
+          const rangeKey = catBucketKeys[elements[0].index];
+          const el = document.getElementById('drill-cat-min');
+          if (el._last === rangeKey) { el.innerHTML=''; el._last=null; return; }
+          el._last = rangeKey;
+          const [lo,hi] = catMinRangeMap[rangeKey];
+          const gs = goals.filter(g=>{const m=+g.minute;return m>=lo&&m<=hi;}).sort((a,b)=>+a.minute-+b.minute);
+          el.innerHTML = drillHeader('Minuto '+rangeKey+' — '+gs.length+' goles','drill-cat-min') + goalsDrillHtml(gs);
+        },
+        plugins:{legend:{display:false}, datalabels:{anchor:'end',align:'end',color:'#374151',font:{weight:'700',size:11},formatter:v=>v>0?v:''}},
+        scales:{y:{beginAtZero:true}}
+      }
     });
   }
 }
