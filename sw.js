@@ -1,4 +1,4 @@
-const CACHE = 'actas-v6';
+const CACHE = 'actas-v7';
 const PRECACHE = [
   './',
   './index.html',
@@ -24,8 +24,12 @@ self.addEventListener('activate', e => {
 
 self.addEventListener('fetch', e => {
   const url = new URL(e.request.url);
-  // CSVs: network-first con fallback a caché
-  if (url.pathname.endsWith('.csv')) {
+  // HTML/navegación y CSVs: network-first con fallback a caché
+  // (así las ediciones de index.html y los datos siempre se actualizan)
+  const isHTML = e.request.mode === 'navigate'
+    || url.pathname.endsWith('.html')
+    || url.pathname === '/' || url.pathname.endsWith('/');
+  if (url.pathname.endsWith('.csv') || isHTML) {
     e.respondWith(
       fetch(e.request)
         .then(res => {
@@ -37,7 +41,7 @@ self.addEventListener('fetch', e => {
     );
     return;
   }
-  // Resto: cache-first
+  // Resto (librerías CDN, imágenes): cache-first
   e.respondWith(
     caches.match(e.request).then(cached => cached || fetch(e.request))
   );
