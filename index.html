@@ -1964,7 +1964,7 @@ const CATEGORIAS_LABELS = ['CADETE HONOR BIZKAIA', 'LIGA VASCA JUVENIL'];
 let catSelectedIdx = 0;
 let catSubTab = 'actas';
 let catActasPage = 1;
-let catActasTeam = '';        // equipo seleccionado en el filtro de actas
+let catActasTeam = null;      // null=no inicializado, ''=todos, string=equipo concreto
 const CAT_ACTAS_PAGE_SIZE = 20;
 let catDashPlayerSearch = '';   // texto de búsqueda de jugador en el dashboard
 let catEqTopN = 0;              // 0 = todos los equipos en gráficas de datos equipos
@@ -1999,7 +1999,7 @@ let catMainTab = 'equipos-tab';
 function selectCategoria(idx) {
   catSelectedIdx = idx;
   catActasPage = 1;
-  catActasTeam = '';  // resetear para que ROMO se detecte en la nueva competición
+  catActasTeam = null;  // resetear para que ROMO se detecte en la nueva competición
   renderCategorias();
 }
 
@@ -2127,8 +2127,8 @@ function renderCategorias() {
     const esc = (s) => String(s).replace(/"/g, '&quot;');
     // Equipos únicos de la competición
     const teamNamesActas = [...new Set(results.flatMap(m => [m.home_team_name, m.away_team_name]).filter(Boolean))].sort((a,b) => a.localeCompare(b));
-    // Inicializar con ROMO si aún no hay selección o si el equipo seleccionado no está en esta competición
-    if (!catActasTeam || !teamNamesActas.includes(catActasTeam)) {
+    // Inicializar con ROMO solo la primera vez (null); si el usuario eligió '' (todos) o un equipo, respetar
+    if (catActasTeam === null || (catActasTeam !== '' && !teamNamesActas.includes(catActasTeam))) {
       catActasTeam = teamNamesActas.find(n => isRomo(n)) || '';
     }
     let filtered = results;
